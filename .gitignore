@@ -1,1 +1,22 @@
+# Archivos de sistema
+.DS_Store
+Thumbs.db
 
+# Temporales de editores (VS Code, Sublime, etc)
+.vscode/
+.idea/
+*.swp
+*.log
+
+# Carpetas de dependencias (si llegas a usar npm)
+node_modules/
+dist/
+
+# Archivos de respaldo o basura
+*.tmp
+*.bak
+
+# Opcional: Si quieres ignorar archivos de audio muy pesados 
+# (Solo actívalo si vas a subir archivos de 100MB+)
+# *.mp3
+# *.wav
