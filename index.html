@@ -2,99 +2,129 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Taming Style PVP - Pro Edition</title>
+    <title>Taming IO Replica Pro</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: Arial; }
-        #ui { position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; pointer-events: none; }
-        #shop { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
-        .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; transition: 0.2s; }
-        .ak47 { background: #d35400; } .sniper { background: #2980b9; } .mg { background: #27ae60; }
-        .btn:hover { transform: scale(1.1); }
+        body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        /* PANTALLA DE INICIO */
+        #pantalla-inicio, #pantalla-descanso {
+            position: absolute; width: 100%; height: 100%; 
+            background: rgba(16, 153, 187, 0.9);
+            display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10;
+        }
+        #pantalla-descanso { display: none; background: rgba(0, 0, 0, 0.8); color: white; }
+        
+        h1 { color: white; font-size: 50px; text-shadow: 3px 3px #d35400; }
+        .btn-play { padding: 20px 60px; font-size: 30px; background: #2ecc71; color: white; border: none; border-radius: 10px; cursor: pointer; transition: 0.3s; }
+        .btn-play:hover { transform: scale(1.1); background: #27ae60; }
+
+        /* INTERFAZ DE JUEGO */
+        #ui { position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 8px; display: none; }
+        #shop { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: none; gap: 15px; }
+        .arma-btn { padding: 12px 25px; border: 3px solid white; border-radius: 8px; cursor: pointer; color: white; font-weight: bold; }
+        .selected { border-color: #f1c40f; transform: translateY(-5px); }
     </style>
 </head>
 <body>
+
+    <div id="pantalla-inicio">
+        <h1>TAMING.IO CLONE</h1>
+        <button class="btn-play" onclick="comenzarJuego()">JUGAR</button>
+    </div>
+
+    <div id="pantalla-descanso">
+        <h1>HAS CAÍDO EN BATALLA</h1>
+        <p id="stats-finales">Oro recolectado: $0</p>
+        <button class="btn-play" onclick="location.reload()">REINTENTAR</button>
+    </div>
+
     <div id="ui">ORO: $<span id="oro">50</span> | VIDA: <span id="vida">100</span>%</div>
     <div id="shop">
-        <button class="btn ak47" onclick="cambiarArma('AK47')">AK-47</button>
-        <button class="btn sniper" onclick="cambiarArma('SNIPER')">SNIPER</button>
-        <button class="btn mg" onclick="cambiarArma('MG')">AMETRALLADORA</button>
+        <button id="btn-AK47" class="arma-btn" style="background: #d35400;" onclick="seleccionarArma('AK47')">AK-47</button>
+        <button id="btn-SNIPER" class="arma-btn" style="background: #2980b9;" onclick="seleccionarArma('SNIPER')">SNIPER</button>
+        <button id="btn-MG" class="arma-btn" style="background: #27ae60;" onclick="seleccionarArma('MG')">MG</button>
     </div>
 
     <script src="https://pixijs.download/release/pixi.js"></script>
     <script>
-        (async () => {
+        let juegoIniciado = false;
+        let armaActual = 'AK47';
+        let oro = 50;
+        let vida = 100;
+
+        async function comenzarJuego() {
+            document.getElementById('pantalla-inicio').style.display = 'none';
+            document.getElementById('ui').style.display = 'block';
+            document.getElementById('shop').style.display = 'flex';
+            juegoIniciado = true;
+            seleccionarArma('AK47');
+            await iniciarPixi();
+        }
+
+        function seleccionarArma(tipo) {
+            armaActual = tipo;
+            document.querySelectorAll('.arma-btn').forEach(b => b.classList.remove('selected'));
+            document.getElementById('btn-' + tipo).classList.add('selected');
+        }
+
+        async function iniciarPixi() {
             const app = new PIXI.Application();
             await app.init({ background: '#1099bb', resizeTo: window, antialias: true });
             document.body.appendChild(app.canvas);
 
-            // OPTIMIZACIÓN: Contenedores separados
             const world = new PIXI.Container();
             app.stage.addChild(world);
-            
-            // EL JUGADOR (Estilo Taming)
+
+            // JUGADOR PRO
             const player = new PIXI.Container();
             const body = new PIXI.Graphics().circle(0, 0, 25).fill(0xe67e22).stroke({width:3, color:0x000000});
             const hL = new PIXI.Graphics().circle(-30, 15, 8).fill(0xd35400).stroke({width:2, color:0x000000});
             const hR = new PIXI.Graphics().circle(30, 15, 8).fill(0xd35400).stroke({width:2, color:0x000000});
             player.addChild(body, hL, hR);
-            player.x = 400; player.y = 300;
+            player.x = 1000; player.y = 1000;
             world.addChild(player);
 
-            let oro = 50;
-            let vida = 100;
-            const keys = {};
+            // MAPA Y ZOMBIES
+            const MAP_SIZE = 3000;
             const zombies = [];
-
-            // FIX PAREDES: Límites del mapa
-            const MAP_SIZE = 2000;
-            const bounds = new PIXI.Graphics().rect(0, 0, MAP_SIZE, MAP_SIZE).stroke({width:10, color:0x000000});
-            world.addChild(bounds);
-
-            // CREAR ZOMBIES (Sin que se peguen entre ellos)
-            for(let i=0; i<15; i++) {
-                const z = new PIXI.Graphics().circle(0, 0, 20).fill(0x2ecc71).stroke({width:3, color:0x000000});
-                z.x = Math.random() * MAP_SIZE;
-                z.y = Math.random() * MAP_SIZE;
-                zombies.push(z);
-                world.addChild(z);
+            for(let i=0; i<20; i++) {
+                const z = new PIXI.Graphics().circle(0, 0, 22).fill(0x2ecc71).stroke({width:3, color:0x000000});
+                z.x = Math.random() * MAP_SIZE; z.y = Math.random() * MAP_SIZE;
+                zombies.push(z); world.addChild(z);
             }
 
+            const keys = {};
             window.addEventListener('keydown', (e) => keys[e.code] = true);
             window.addEventListener('keyup', (e) => keys[e.code] = false);
 
-            // BUCLE PRINCIPAL (Game Loop)
             app.ticker.add((delta) => {
-                const speed = 5 * delta.deltaTime;
-                let nextX = player.x;
-                let nextY = player.y;
+                if(!juegoIniciado || vida <= 0) return;
 
-                if (keys['KeyW']) nextY -= speed;
-                if (keys['KeyS']) nextY += speed;
-                if (keys['KeyA']) nextX -= speed;
-                if (keys['KeyD']) nextX += speed;
+                // MOVIMIENTO WASD + COLISIONES PARED
+                const speed = (armaActual === 'SNIPER' ? 4 : 6) * delta.deltaTime;
+                if (keys['KeyW'] && player.y > 30) player.y -= speed;
+                if (keys['KeyS'] && player.y < MAP_SIZE - 30) player.y += speed;
+                if (keys['KeyA'] && player.x > 30) player.x -= speed;
+                if (keys['KeyD'] && player.x < MAP_SIZE - 30) player.x += speed;
 
-                // ANTIPASAR PAREDES
-                if (nextX > 25 && nextX < MAP_SIZE - 25) player.x = nextX;
-                if (nextY > 25 && nextY < MAP_SIZE - 25) player.y = nextY;
-
-                // CAMARA SIGUE AL JUGADOR
+                // CAMARA
                 world.x = -player.x + app.screen.width / 2;
                 world.y = -player.y + app.screen.height / 2;
 
-                // LÓGICA DE ZOMBIES ANTI-LAG
+                // ZOMBIES (Lógica Anti-Lag y Anti-Apegue)
                 zombies.forEach(z => {
                     const dx = player.x - z.x;
                     const dy = player.y - z.y;
                     const dist = Math.sqrt(dx*dx + dy*dy);
                     
-                    if(dist < 500) { // Solo se mueven si estás cerca (Ahorra CPU)
+                    if(dist < 600) {
                         z.x += (dx / dist) * 2;
                         z.y += (dy / dist) * 2;
                         
-                        // Si te tocan, no se "enciman", rebotan
-                        if(dist < 40) {
-                            vida -= 0.1;
+                        if(dist < 45) { // Daño y rebote para que no se peguen
+                            vida -= 0.2;
+                            player.x -= (dx / dist) * 5; // Empujón hacia atrás
                             document.getElementById('vida').innerText = Math.max(0, Math.floor(vida));
+                            if(vida <= 0) terminarJuego();
                         }
                     }
                 });
@@ -103,14 +133,17 @@
             // ROTACIÓN AL MOUSE
             app.stage.eventMode = 'static';
             app.stage.on('pointermove', (e) => {
-                const pos = e.global;
-                player.rotation = Math.atan2(pos.y - app.screen.height/2, pos.x - app.screen.width/2) + Math.PI/2;
+                if(!juegoIniciado) return;
+                player.rotation = Math.atan2(e.global.y - app.screen.height/2, e.global.x - app.screen.width/2) + Math.PI/2;
             });
-        })();
+        }
 
-        function cambiarArma(tipo) {
-            console.log("Arma equipada: " + tipo);
-            // Aquí añadiremos el cambio visual después
+        function terminarJuego() {
+            juegoIniciado = false;
+            document.getElementById('stats-finales').innerText = `Oro recolectado: $${oro}`;
+            document.getElementById('pantalla-descanso').style.display = 'flex';
+            document.getElementById('ui').style.display = 'none';
+            document.getElementById('shop').style.display = 'none';
         }
     </script>
 </body>
