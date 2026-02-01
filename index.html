@@ -23,7 +23,6 @@
         #vida-bg { width: 200px; height: 18px; background: #444; border: 2px solid #fff; margin: 8px 0; }
         #vida-bar { width: 100%; height: 100%; background: #ff4444; transition: width 0.2s; }
         
-        /* Estilo para los slots del inventario */
         .inventario { display: flex; gap: 5px; margin-top: 10px; }
         .slot { width: 45px; height: 45px; background: rgba(255,255,255,0.1); border: 2px solid #777; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
         .slot.activo { border-color: #f1c40f; background: rgba(241, 196, 15, 0.3); box-shadow: 0 0 10px #f1c40f; }
@@ -35,23 +34,22 @@
         <h1 style="font-size: 45px; color: #3498db; text-shadow: 2px 2px #000;">SURVIVAL IO</h1>
         <div style="background: rgba(255,255,255,0.1); padding: 25px; border-radius: 15px; border: 2px solid #3498db;">
             <h2 style="color: gold; margin: 0;">BANCO: $<span id="banco-total">0</span></h2>
-            <p style="font-size: 14px; color: #aaa;">EQUIPA TUS ARMAS EN EL MAPA</p>
             <button class="btn" onclick="empezarJuego()">ENTRAR AL MAPA</button><br>
-            <button class="btn" style="background: #e67e22; border-color: #d35400;" onclick="comprar('ak47', 150)">COMPRAR AK-47 ($150)</button><br>
-            <button class="btn" style="background: #9b59b6; border-color: #8e44ad;" onclick="comprar('sniper', 300)">COMPRAR SNIPER ($300)</button>
+            <button class="btn" style="background: #e67e22; border-color: #d35400;" onclick="comprar('ak47', 150)">AK-47 ($150)</button><br>
+            <button class="btn" style="background: #9b59b6; border-color: #8e44ad;" onclick="comprar('sniper', 300)">SNIPER ($300)</button>
         </div>
     </div>
 
     <div id="ui-juego">
         <div class="stats-box">
-            <div style="font-size: 22px; color: gold;">MONEDAS: $<span id="puntos">0</span></div>
+            <div style="font-size: 22px; color: gold;">ORO: $<span id="puntos">0</span></div>
             <div id="vida-bg"><div id="vida-bar"></div></div>
             <div class="inventario">
                 <div id="slot-1" class="slot activo">1</div>
                 <div id="slot-2" class="slot">2</div>
                 <div id="slot-3" class="slot">3</div>
             </div>
-            <div style="margin-top: 10px; font-size: 11px; color: #ddd;">USA TECLAS 1, 2, 3</div>
+            <div style="margin-top: 10px; font-size: 11px; color: #ddd;">MOVER: WASD | DISPARAR: ESPACIO o CLICK</div>
         </div>
     </div>
 
@@ -66,10 +64,8 @@
         const MUNDO_ANCHO = 3000;
         const MUNDO_ALTO = 3000;
 
-        // Persistencia de armas compradas
         let banco = parseInt(localStorage.getItem("banco_io")) || 0;
         let misArmas = JSON.parse(localStorage.getItem("inventario_io")) || ["pistola"];
-        
         document.getElementById("banco-total").innerText = banco;
 
         const STATS_ARMAS = {
@@ -108,10 +104,10 @@
             });
         }
 
-        // --- CONTROLES ---
+        // --- SECCIÓN DE EVENTOS CORREGIDA ---
         window.addEventListener("keydown", (e) => {
             teclas[e.key.toLowerCase()] = true;
-            // Cambio de arma con números
+            // Cambiar arma con 1, 2, 3
             if (["1", "2", "3"].includes(e.key)) {
                 let armaSeleccionada = Object.keys(STATS_ARMAS).find(k => STATS_ARMAS[k].slot == e.key);
                 if (jugador.inventario.includes(armaSeleccionada)) {
@@ -121,27 +117,49 @@
             }
         });
 
-        window.addEventListener("keyup", (e) => teclas[e.key.toLowerCase()] = false);
+        window.addEventListener("keyup", (e) => {
+            teclas[e.key.toLowerCase()] = false;
+        });
+
         window.addEventListener("mousemove", (e) => { mouseX = e.clientX; mouseY = e.clientY; });
+        window.addEventListener("mousedown", () => { teclas["mousedown"] = true; });
+        window.addEventListener("mouseup", () => { teclas["mousedown"] = false; });
 
         function actualizarUIInventario(num) {
             document.querySelectorAll('.slot').forEach(s => s.classList.remove('activo'));
             document.getElementById('slot-' + num).classList.add('activo');
         }
 
+        function disparar() {
+            let ahora = Date.now();
+            let s = STATS_ARMAS[jugador.arma];
+            if(ahora - lastShot > s.cadencia) {
+                let dx = (mouseX + camara.x) - jugador.x;
+                let dy = (mouseY + camara.y) - jugador.y;
+                let ang = Math.atan2(dy, dx);
+                balas.push({ x: jugador.x, y: jugador.y, vx: Math.cos(ang)*s.velB, vy: Math.sin(ang)*s.velB, tipo: jugador.arma });
+                lastShot = ahora;
+            }
+        }
+
         function actualizar() {
             if(!enJuego) return;
 
-            // Movimiento
+            // Movimiento WASD
             if (teclas["w"] && jugador.y > 0) jugador.y -= jugador.vel;
             if (teclas["s"] && jugador.y < MUNDO_ALTO) jugador.y += jugador.vel;
             if (teclas["a"] && jugador.x > 0) jugador.x -= jugador.vel;
             if (teclas["d"] && jugador.x < MUNDO_ANCHO) jugador.x += jugador.vel;
 
+            // DISPARAR CON ESPACIO O CLICK
+            if (teclas[" "] || teclas["mousedown"]) {
+                disparar();
+            }
+
             camara.x = jugador.x - canvas.width / 2;
             camara.y = jugador.y - canvas.height / 2;
 
-            // Zombies con Colisión Física (No atraviesan al jugador)
+            // Zombies y Colisiones
             zombies.forEach((z) => {
                 let dx = jugador.x - z.x;
                 let dy = jugador.y - z.y;
@@ -150,30 +168,15 @@
                 z.x += (dx/dist) * z.vel;
                 z.y += (dy/dist) * z.vel;
 
-                // Si chocan, se empujan (Colisión sólida)
                 if(dist < jugador.r + z.r) {
                     let overlap = (jugador.r + z.r) - dist;
                     z.x -= (dx/dist) * overlap;
                     z.y -= (dy/dist) * overlap;
-                    
                     vida -= 0.5;
                     document.getElementById("vida-bar").style.width = vida + "%";
                     if(vida <= 0) morir();
                 }
             });
-
-            // Disparo automático al mantener click
-            if(teclas["mousedown"]) {
-                let ahora = Date.now();
-                let s = STATS_ARMAS[jugador.arma];
-                if(ahora - lastShot > s.cadencia) {
-                    let dx = (mouseX + camara.x) - jugador.x;
-                    let dy = (mouseY + camara.y) - jugador.y;
-                    let ang = Math.atan2(dy, dx);
-                    balas.push({ x: jugador.x, y: jugador.y, vx: Math.cos(ang)*s.velB, vy: Math.sin(ang)*s.velB, tipo: jugador.arma });
-                    lastShot = ahora;
-                }
-            }
 
             // Balas
             balas.forEach((b, bi) => {
@@ -189,22 +192,19 @@
                 });
             });
         }
-        
-        window.addEventListener("mousedown", () => teclas["mousedown"] = true);
-        window.addEventListener("mouseup", () => teclas["mousedown"] = false);
 
         function dibujar() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.save();
             ctx.translate(-camara.x, -camara.y);
 
-            // Fondo Grid
+            // Suelo Grid
             ctx.fillStyle = "#222"; ctx.fillRect(0,0, MUNDO_ANCHO, MUNDO_ALTO);
             ctx.strokeStyle = "#333"; ctx.lineWidth = 1;
             for(let i=0; i<=MUNDO_ANCHO; i+=100) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,MUNDO_ALTO); ctx.stroke(); }
             for(let j=0; j<=MUNDO_ALTO; j+=100) { ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(MUNDO_ANCHO,j); ctx.stroke(); }
 
-            // Zombies (Estilo Taming.io)
+            // Zombies
             zombies.forEach(z => {
                 ctx.fillStyle = "#ff4757"; ctx.strokeStyle = "#000"; ctx.lineWidth = 4;
                 ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
@@ -220,7 +220,7 @@
             ctx.strokeRect(15, -6, STATS_ARMAS[jugador.arma].largo, 12);
             ctx.restore();
 
-            // Jugador (Estilo Taming.io)
+            // Jugador
             ctx.fillStyle = "#3498db"; ctx.strokeStyle = "#000"; ctx.lineWidth = 5;
             ctx.beginPath(); ctx.arc(jugador.x, jugador.y, jugador.r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
 
@@ -239,7 +239,7 @@
                 localStorage.setItem("banco_io", banco);
                 localStorage.setItem("inventario_io", JSON.stringify(misArmas));
                 document.getElementById("banco-total").innerText = banco;
-                alert("¡" + arma.toUpperCase() + " COMPRADO! Cámbialo con los números en el juego.");
+                alert("¡COMPRADO! Presiona " + STATS_ARMAS[arma].slot + " para equipar.");
             } else if(misArmas.includes(arma)) {
                 alert("YA TIENES ESTA ARMA");
             } else { alert("DINERO INSUFICIENTE"); }
@@ -249,7 +249,7 @@
             enJuego = false;
             banco += puntosPartida;
             localStorage.setItem("banco_io", banco);
-            alert("GAME OVER. Ganaste: $" + puntosPartida);
+            alert("GAME OVER. ORO: " + puntosPartida);
             location.reload(); 
         }
 
