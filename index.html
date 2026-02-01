@@ -28,7 +28,7 @@
         #touch-controls { position: absolute; bottom: 30px; width: 100%; height: 150px; display: none; pointer-events: none; }
         .joystick-area { position: absolute; left: 30px; bottom: 20px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border-radius: 50%; pointer-events: auto; }
         .joystick-stick { position: absolute; left: 35px; top: 35px; width: 50px; height: 50px; background: rgba(255,255,255,0.5); border-radius: 50%; }
-        #btn-shoot { position: absolute; right: 40px; bottom: 30px; width: 80px; height: 80px; background: rgba(231, 76, 60, 0.7); border-radius: 50%; pointer-events: auto; display: flex; align-it[...]
+        #btn-shoot { position: absolute; right: 40px; bottom: 30px; width: 80px; height: 80px; background: rgba(231, 76, 60, 0.7); border-radius: 50%; pointer-events: auto; display: flex; align-items:center; justify-content:center; color:white; font-weight:bold; }
     </style>
 </head>
 <body>
@@ -65,6 +65,16 @@
         let banco = parseInt(localStorage.getItem("banco_io")) || 0;
         let joyPos = { x: 0, y: 0 }, isTouching = false;
 
+        // Delta-time support
+        let lastTime = 0;
+
+        // Multiplayer vars
+        let peer = null;
+        let conexiones = [];            // array de PeerJS connections
+        let otrosJugadores = {};        // mapa peerId -> {x,y,ang,vida,nombre}
+        let miNombre = localStorage.getItem('zbr_nombre') || ('Jugador' + Math.floor(Math.random()*9000 + 1000));
+        localStorage.setItem('zbr_nombre', miNombre);
+
         document.getElementById("banco-total").innerText = banco;
 
         function empezarJuego() {
@@ -78,7 +88,21 @@
             canvas.height = window.innerHeight;
 
             jugador = { x: MUNDO/2, y: MUNDO/2, r: 25, vel: 5, vida: 100, puntos: 0, ang: 0 };
+            document.getElementById("vida-bar").style.width = jugador.vida + "%";
+
             for(let i=0; i<30; i++) spawnZombie();
+
+            // iniciar PeerJS (si no está ya)
+            if(!peer) iniciarPeer();
+
+            // enviar estado periódicamente a conexiones
+            setInterval(() => {
+                if(!enJuego) return;
+                broadcastEstado();
+            }, 100);
+
+            // inicializar lastTime y empezar bucle con requestAnimationFrame
+            lastTime = performance.now();
             requestAnimationFrame(bucle);
         }
 
@@ -124,17 +148,18 @@
         });
         document.getElementById("btn-shoot").addEventListener("touchend", () => teclas["mousedown"] = false);
 
-        function actualizar() {
-            // Movimiento PC vs Móvil
+        // actualizar ahora acepta dt (factor basado en 16ms)
+        function actualizar(dt) {
+            // Movimiento PC vs Móvil (multiplicamos por dt)
             if(isTouching) {
-                jugador.x += joyPos.x * jugador.vel;
-                jugador.y += joyPos.y * jugador.vel;
+                jugador.x += joyPos.x * jugador.vel * dt;
+                jugador.y += joyPos.y * jugador.vel * dt;
                 jugador.ang = Math.atan2(joyPos.y, joyPos.x); // Apunta hacia donde camina en móvil
             } else {
-                if (teclas["w"]) jugador.y -= jugador.vel;
-                if (teclas["s"]) jugador.y += jugador.vel;
-                if (teclas["a"]) jugador.x -= jugador.vel;
-                if (teclas["d"]) jugador.x += jugador.vel;
+                if (teclas["w"]) jugador.y -= jugador.vel * dt;
+                if (teclas["s"]) jugador.y += jugador.vel * dt;
+                if (teclas["a"]) jugador.x -= jugador.vel * dt;
+                if (teclas["d"]) jugador.x += jugador.vel * dt;
             }
 
             if(teclas["mousedown"] || teclas[" "]) disparar();
@@ -142,40 +167,231 @@
             camara.x = jugador.x - canvas.width/2;
             camara.y = jugador.y - canvas.height/2;
 
-            // Zombies
-            zombies.forEach(z => {
-                let d = Math.hypot(jugador.x - z.x, jugador.y - z.y);
-                z.x += (jugador.x - z.x)/d * z.vel;
-                z.y += (jugador.y - z.y)/d * z.vel;
-                if(d < jugador.r + z.r) {
-                    jugador.vida -= 0.5;
-                    document.getElementById("vida-bar").style.width = jugador.vida + "%";
+            // Zombies (velocidad por tiempo)
+            for (let i = 0; i < zombies.length; i++) {
+                let z = zombies[i];
+                let dx = jugador.x - z.x;
+                let dy = jugador.y - z.y;
+                let d = Math.hypot(dx, dy) || 1;
+                z.x += (dx / d) * z.vel * dt;
+                z.y += (dy / d) * z.vel * dt;
+                let dist = Math.hypot(jugador.x - z.x, jugador.y - z.y);
+                if(dist < jugador.r + z.r) {
+                    jugador.vida -= 0.5 * dt; // daño por tiempo
+                    document.getElementById("vida-bar").style.width = Math.max(0, jugador.vida) + "%";
                     if(jugador.vida <= 0) location.reload();
                 }
-            });
+            }
 
-            // Balas
-            balas.forEach((b, bi) => {
-                b.x += b.vx; b.y += b.vy;
-                zombies.forEach((z, zi) => {
+            // Balas (movimiento por tiempo)
+            for (let bi = balas.length - 1; bi >= 0; bi--) {
+                let b = balas[bi];
+                b.x += b.vx * dt;
+                b.y += b.vy * dt;
+                // quitar balas fuera del mundo para evitar fugas
+                if (b.x < -100 || b.y < -100 || b.x > MUNDO + 100 || b.y > MUNDO + 100) {
+                    balas.splice(bi,1);
+                    continue;
+                }
+                for (let zi = zombies.length - 1; zi >= 0; zi--) {
+                    let z = zombies[zi];
                     if(Math.hypot(b.x - z.x, b.y - z.y) < z.r) {
-                        jugador.puntos += 10;
+                        // solo suma puntos si la bala es local (no 'enemigo')
+                        if (!b.tipo || b.tipo !== 'enemigo') {
+                            jugador.puntos += 10;
+                            document.getElementById("puntos").innerText = jugador.puntos;
+                        }
                         zombies.splice(zi, 1);
                         balas.splice(bi, 1);
                         spawnZombie();
-                        document.getElementById("puntos").innerText = jugador.puntos;
+                        break;
                     }
-                });
+                }
+            }
+
+            // limpieza periódica de objetos
+            limpiarObjetos();
+        }
+
+        // Limpiar balas y controlar número de zombies
+        function limpiarObjetos() {
+            // Borrar balas que se salen del mundo o viajan mucho
+            balas = balas.filter(b => b.x > 0 && b.x < MUNDO && b.y > 0 && b.y < MUNDO);
+
+            // Si hay demasiados zombies (más de 100), eliminar los más antiguos hasta 100
+            if(zombies.length > 100) {
+                zombies.splice(0, zombies.length - 100);
+            }
+        }
+
+        // enviar disparo a conexiones (incluye nombre) — con try/catch por seguridad
+        function enviarDisparo(datosBala) {
+            if (typeof conexiones === 'undefined' || !Array.isArray(conexiones)) return;
+            conexiones.forEach(conn => {
+                try {
+                    conn.send({
+                        tipo: 'disparo',
+                        x: datosBala.x,
+                        y: datosBala.y,
+                        vx: datosBala.vx,
+                        vy: datosBala.vy,
+                        nombre: miNombre
+                    });
+                } catch (e) {
+                    console.warn('Error enviando disparo a', conn && conn.peer, e);
+                }
             });
         }
 
+        // Función disparar: ahora notifica a las conexiones para que vean la bala
         function disparar() {
             let ahora = Date.now();
             if(!this.lastS) this.lastS = 0;
             if(ahora - this.lastS > 200) {
-                balas.push({ x: jugador.x, y: jugador.y, vx: Math.cos(jugador.ang)*15, vy: Math.sin(jugador.ang)*15 });
+                // Nota: vx/vy son velocidad por frame base (16ms). Usaremos dt en actualización.
+                const speed = 15; // velocidad base (por "frame" de 16ms)
+                const nuevaBala = { x: jugador.x, y: jugador.y, vx: Math.cos(jugador.ang)*speed, vy: Math.sin(jugador.ang)*speed };
+                balas.push(nuevaBala);
+
+                // Avisar a las conexiones (si existen) para que creen la bala en sus clientes
+                enviarDisparo(nuevaBala);
+
                 this.lastS = ahora;
             }
+        }
+
+        // PeerJS: inicialización y helpers
+        function iniciarPeer() {
+            peer = new Peer(); // opciones se pueden añadir {key, host, port} si usas custom PeerServer
+            peer.on('open', id => {
+                console.log('Peer abierto, id =', id);
+                // pedir al usuario el id del amigo o permitir que compartan el tuyo
+                setTimeout(() => {
+                    try {
+                        const target = prompt("Tu ID: " + id + "\nIntroduce el ID del amigo para conectar o deja vacío para esperar conexiones:");
+                        if (target && target.trim()) {
+                            const conn = peer.connect(target.trim());
+                            conn.on('open', () => setupConnection(conn));
+                        } else {
+                            // solo espera conexiones entrantes
+                            alert("Comparte tu ID con tu amigo: " + id);
+                        }
+                    } catch(e) {
+                        console.warn('Prompt/connection error', e);
+                    }
+                }, 200);
+            });
+
+            peer.on('connection', conn => {
+                // cuando alguien se conecta a ti
+                conn.on('open', () => {
+                    setupConnection(conn);
+                });
+            });
+
+            peer.on('error', err => {
+                console.warn('Peer error', err);
+            });
+        }
+
+        function setupConnection(conn) {
+            try {
+                // evitar duplicados
+                if (conexiones.indexOf(conn) === -1) conexiones.push(conn);
+
+                conn.on('data', data => {
+                    try {
+                        handleIncomingData(conn, data);
+                    } catch (e) {
+                        console.warn('Error procesando datos entrantes de', conn.peer, e);
+                    }
+                });
+
+                conn.on('close', () => {
+                    delete otrosJugadores[conn.peer];
+                    conexiones = conexiones.filter(c => c !== conn);
+                });
+
+                conn.on('error', (err) => {
+                    console.warn('Conn error con', conn.peer, err);
+                });
+
+                // enviar estado inicial/comprobar que reciban nombre
+                conn.send({
+                    tipo: 'estado',
+                    x: jugador ? jugador.x : 0,
+                    y: jugador ? jugador.y : 0,
+                    ang: jugador ? jugador.ang : 0,
+                    vida: jugador ? jugador.vida : 100,
+                    nombre: miNombre
+                });
+            } catch(e) {
+                console.warn('Error en setupConnection', e);
+            }
+        }
+
+        function handleIncomingData(conn, data) {
+            if (!data || !data.tipo) return;
+            if(data.tipo === 'disparo') {
+                // la bala del otro jugador; marcar tipo:'enemigo' para distinguir
+                try {
+                    // recibimos vx/vy en la misma escala que enviamos (por frame base)
+                    balas.push({ x: data.x, y: data.y, vx: data.vx, vy: data.vy, tipo: 'enemigo', nombre: data.nombre || conn.peer });
+                } catch(e) {
+                    console.warn('Error creando bala recibida', e);
+                }
+            } else if (data.tipo === 'estado') {
+                otrosJugadores[conn.peer] = {
+                    x: data.x,
+                    y: data.y,
+                    ang: data.ang,
+                    vida: data.vida,
+                    nombre: data.nombre || ('Jugador' + conn.peer.substring(0,4))
+                };
+            } else {
+                // otros tipos futuros
+                otrosJugadores[conn.peer] = otrosJugadores[conn.peer] || {};
+                if (data.nombre) otrosJugadores[conn.peer].nombre = data.nombre;
+            }
+        }
+
+        function broadcastEstado() {
+            if (!conexiones || conexiones.length === 0 || !jugador) return;
+            const estado = {
+                tipo: 'estado',
+                x: jugador.x,
+                y: jugador.y,
+                ang: jugador.ang,
+                vida: jugador.vida,
+                nombre: miNombre
+            };
+            conexiones.forEach(conn => {
+                try { conn.send(estado); } catch(e) { console.warn('Error enviando estado a', conn.peer, e); }
+            });
+        }
+
+        // Dibuja otros jugadores basados en datos recibidos
+        function dibujarOtrosJugadores() {
+            Object.keys(otrosJugadores).forEach(id => {
+                const p = otrosJugadores[id];
+                if (!p) return;
+
+                // cuerpo del jugador (ejemplo: distinto color)
+                ctx.fillStyle = "#2ecc71";
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 25, 0, Math.PI*2);
+                ctx.fill();
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = "#000";
+                ctx.stroke();
+
+                // nombre encima del círculo (ten en cuenta que ya estamos en coordenadas mundiales)
+                ctx.fillStyle = "white";
+                ctx.font = "14px Arial";
+                ctx.textAlign = "center";
+                const nombreParaMostrar = p.nombre || id.substring(0,4);
+                ctx.fillText(nombreParaMostrar, p.x, p.y - 35);
+            });
         }
 
         function dibujar() {
@@ -192,7 +408,10 @@
                 ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
             });
 
-            // Jugador
+            // Otros jugadores (antes del jugador local para que tu nombre no tape la tuya)
+            dibujarOtrosJugadores();
+
+            // Jugador (local)
             ctx.save();
             ctx.translate(jugador.x, jugador.y);
             ctx.rotate(jugador.ang);
@@ -202,15 +421,40 @@
             ctx.fillStyle = "#3498db"; ctx.strokeStyle = "#000"; ctx.lineWidth = 5;
             ctx.beginPath(); ctx.arc(jugador.x, jugador.y, jugador.r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
 
+            // nombre propio encima
+            ctx.fillStyle = "white";
+            ctx.font = "14px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(miNombre, jugador.x, jugador.y - 35);
+
             // Balas
             balas.forEach(b => {
-                ctx.fillStyle = "yellow"; ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = (b.tipo && b.tipo === 'enemigo') ? "orange" : "yellow";
+                ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill();
             });
 
             ctx.restore();
         }
 
-        function bucle() { if(enJuego) { actualizar(); dibujar(); requestAnimationFrame(bucle); } }
+        // requestAnimationFrame loop con dt (time en ms viene de RAF)
+        function bucle(time) {
+            // dt: número de "frames" de 16ms transcurridos (60 FPS base)
+            let dt = (time - lastTime) / 16;
+            // limitar dt razonablemente para evitar saltos enormes si la pestaña vuelve de fondo
+            dt = Math.min(dt, 5);
+            lastTime = time;
+
+            if (enJuego) {
+                try {
+                    actualizar(dt);
+                    dibujar();
+                } catch (e) {
+                    console.warn('Error en bucle principal', e);
+                }
+                requestAnimationFrame(bucle);
+            }
+        }
     </script>
 </body>
+</html>
 </html>
