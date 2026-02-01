@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Zombies BR - Movimiento</title>
+    <title>Zombies BR - ¡Sobrevive!</title>
     <style>
         body { background: #1a1a1a; color: lime; text-align: center; font-family: sans-serif; overflow: hidden; }
         canvas { background: #000; border: 3px solid #555; display: block; margin: 0 auto; }
@@ -10,66 +10,14 @@
 </head>
 <body>
     <h1>Zombies Battle Royale</h1>
-    <p>Mueve al sobreviviente con las flechas o WASD</p>
+    <p>¡Huye del cuadrado ROJO!</p>
     <canvas id="juego" width="600" height="400"></canvas>
 
     <script>
         const canvas = document.getElementById("juego");
         const ctx = canvas.getContext("2d");
 
-        // Configuración del jugador
-        let jugador = {
-            x: 300,
-            y: 200,
-            tamano: 30,
-            color: "#0077ff",
-            velocidad: 5
-        };
-
-        // Control de teclas
-        let teclas = {};
-        window.addEventListener("keydown", (e) => teclas[e.key] = true);
-        window.addEventListener("keyup", (e) => teclas[e.key] = false);
-
-        function actualizar() {
-            // Movimiento
-            if (teclas["ArrowUp"] || teclas["w"]) jugador.y -= jugador.velocidad;
-            if (teclas["ArrowDown"] || teclas["s"]) jugador.y += jugador.velocidad;
-            if (teclas["ArrowLeft"] || teclas["a"]) jugador.x -= jugador.velocidad;
-            if (teclas["ArrowRight"] || teclas["d"]) jugador.x += jugador.velocidad;
-
-            // No salirse de los bordes
-            if (jugador.x < 0) jugador.x = 0;
-            if (jugador.x > canvas.width - jugador.tamano) jugador.x = canvas.width - jugador.tamano;
-            if (jugador.y < 0) jugador.y = 0;
-            if (jugador.y > canvas.height - jugador.tamano) jugador.y = canvas.height - jugador.tamano;
-        }
-
-        function dibujar() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height); // Limpiar pantalla
-            
-            // Dibujar jugador
-            ctx.fillStyle = jugador.color;
-            ctx.fillRect(jugador.x, jugador.y, jugador.tamano, jugador.tamano);
-            
-            // Efecto de brillo al jugador
-            ctx.strokeStyle = "white";
-            ctx.strokeRect(jugador.x, jugador.y, jugador.tamano, jugador.tamano);
-        }
-
-        function buclePrincipal() {
-            actualizar();
-            dibujar();
-            requestAnimationFrame(buclePrincipal);
-        }
-
-        buclePrincipal(); // ¡Arranca el juego!
-    </script>const canvas = document.getElementById("juego");
-        const ctx = canvas.getContext("2d");
-
         let jugador = { x: 300, y: 200, tam: 30, color: "#0077ff", vel: 5 };
-        
-        // --- NUEVO: El Zombie ---
         let zombie = { x: 10, y: 10, tam: 30, color: "red", vel: 2 };
 
         let teclas = {};
@@ -77,20 +25,16 @@
         window.addEventListener("keyup", (e) => teclas[e.key] = false);
 
         function actualizar() {
-            // Movimiento Jugador
-            if (teclas["ArrowUp"] || teclas["w"]) jugador.y -= jugador.vel;
-            if (teclas["ArrowDown"] || teclas["s"]) jugador.y += jugador.vel;
-            if (teclas["ArrowLeft"] || teclas["a"]) jugador.x -= jugador.vel;
-            if (teclas["ArrowRight"] || teclas["d"]) jugador.x += jugador.vel;
+            if (teclash["ArrowUp"] || teclas["w"]) jugador.y -= jugador.vel;
+            if (teclash["ArrowDown"] || teclas["s"]) jugador.y += jugador.vel;
+            if (teclash["ArrowLeft"] || teclas["a"]) jugador.x -= jugador.vel;
+            if (teclash["ArrowRight"] || teclas["d"]) jugador.x += jugador.vel;
 
-            // --- NUEVO: Inteligencia del Zombie ---
-            // El zombie siempre busca tu posición
             if (zombie.x < jugador.x) zombie.x += zombie.vel;
             if (zombie.x > jugador.x) zombie.x -= zombie.vel;
             if (zombie.y < jugador.y) zombie.y += zombie.vel;
             if (zombie.y > jugador.y) zombie.y -= zombie.vel;
             
-            // Si el zombie te toca, te reinicia al centro
             if (Math.abs(jugador.x - zombie.x) < 30 && Math.abs(jugador.y - zombie.y) < 30) {
                 alert("¡TE COMIERON EL CEREBRO!");
                 jugador.x = 300; jugador.y = 200;
@@ -100,10 +44,8 @@
 
         function dibujar() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            // Dibujar Jugador
             ctx.fillStyle = jugador.color;
             ctx.fillRect(jugador.x, jugador.y, jugador.tam, jugador.tam);
-            // Dibujar Zombie
             ctx.fillStyle = zombie.color;
             ctx.fillRect(zombie.x, zombie.y, zombie.tam, zombie.tam);
         }
@@ -114,3 +56,6 @@
             requestAnimationFrame(bucle);
         }
         bucle();
+    </script>
+</body>
+</html>
