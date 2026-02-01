@@ -2,28 +2,47 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>BATTLE SURVIVAL IO</title>
+    <title>SURVIVAL IO - OPEN WORLD</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #1a1a1a; font-family: 'Arial Black', sans-serif; }
         canvas { display: none; background: #2d2d2d; cursor: crosshair; }
-        #menu { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: white; text-align: center; }
-        .btn { background: #3498db; border: none; padding: 15px 40px; color: white; font-size: 24px; cursor: pointer; border-radius: 10px; border-bottom: 5px solid #2980b9; }
+        
+        #menu { 
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100%; color: white; text-align: center; background: #1a1a1a;
+        }
+
+        .btn {
+            background: #2ecc71; border: none; padding: 12px 30px; color: white;
+            font-size: 20px; cursor: pointer; border-radius: 10px; margin: 5px;
+            border-bottom: 4px solid #27ae60; width: 250px;
+        }
+
         #ui-juego { position: absolute; top: 10px; left: 20px; color: white; display: none; pointer-events: none; }
-        #vida-bg { width: 200px; height: 20px; background: #444; border: 2px solid #fff; }
+        .stats-box { background: rgba(0,0,0,0.6); padding: 10px; border-radius: 8px; border-left: 5px solid #3498db; margin-bottom: 5px; }
+        #vida-bg { width: 200px; height: 15px; background: #444; border: 2px solid #fff; }
         #vida-bar { width: 100%; height: 100%; background: #ff4444; }
     </style>
 </head>
 <body>
 
     <div id="menu">
-        <h1 style="font-size: 50px;">BATTLE SURVIVAL IO</h1>
-        <p>BANCO: $<span id="banco-total">0</span></p>
-        <button class="btn" onclick="empezarJuego()">EMPEZAR</button>
+        <h1 style="font-size: 45px; color: #3498db;">SURVIVAL IO</h1>
+        <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 15px; border: 2px solid #3498db;">
+            <h2 style="color: gold; margin: 0;">BANCO: $<span id="banco-total">0</span></h2>
+            <p style="font-size: 14px; color: #aaa;">EQUIPADO: <span id="arma-actual">PISTOLA</span></p>
+            <button class="btn" onclick="empezarJuego()">ENTRAR AL MAPA</button><br>
+            <button class="btn" style="background: #e67e22; border-color: #d35400;" onclick="comprar('ak47', 150)">COMPRAR AK-47 ($150)</button><br>
+            <button class="btn" style="background: #9b59b6; border-color: #8e44ad;" onclick="comprar('sniper', 300)">COMPRAR SNIPER ($300)</button>
+        </div>
     </div>
 
     <div id="ui-juego">
-        <div style="font-size: 24px; color: gold;">SCORE: $<span id="puntos">0</span></div>
-        <div id="vida-bg"><div id="vida-bar"></div></div>
+        <div class="stats-box">
+            <div style="font-size: 22px; color: gold;">MONEDAS: $<span id="puntos">0</span></div>
+            <div id="vida-bg"><div id="vida-bar"></div></div>
+            <div id="arma-txt" style="margin-top: 5px; font-size: 12px;">ARMA: PISTOLA</div>
+        </div>
     </div>
 
     <canvas id="juego"></canvas>
@@ -34,12 +53,19 @@
         const menu = document.getElementById("menu");
         const ui = document.getElementById("ui-juego");
 
+        // --- CONFIGURACIÓN DEL MUNDO ---
+        const MUNDO_ANCHO = 3000;
+        const MUNDO_ALTO = 3000;
         let banco = parseInt(localStorage.getItem("banco_io")) || 0;
+        let armaComprada = localStorage.getItem("arma_equipada") || "pistola";
+        
         document.getElementById("banco-total").innerText = banco;
+        document.getElementById("arma-actual").innerText = armaComprada.toUpperCase();
 
         let enJuego = false, vida = 100, puntosPartida = 0;
         let jugador, zombies, balas, teclas;
         let mouseX = 0, mouseY = 0;
+        let camara = { x: 0, y: 0 };
 
         function empezarJuego() {
             canvas.width = window.innerWidth;
@@ -47,46 +73,55 @@
             enJuego = true; vida = 100; puntosPartida = 0;
             menu.style.display = "none"; canvas.style.display = "block"; ui.style.display = "block";
             
-            jugador = { x: canvas.width/2, y: canvas.height/2, r: 20, vel: 5 };
+            jugador = { x: MUNDO_ANCHO/2, y: MUNDO_ALTO/2, r: 22, vel: 6, arma: armaComprada };
             zombies = []; balas = []; teclas = {};
-            for(let i=0; i<7; i++) crearZombie();
+            for(let i=0; i<25; i++) crearZombie();
             requestAnimationFrame(bucle);
         }
 
         function crearZombie() {
             zombies.push({ 
-                x: Math.random() * canvas.width, 
-                y: Math.random() < 0.5 ? -50 : canvas.height + 50, 
-                r: 22, vel: 1.2 + Math.random() 
+                x: Math.random() * MUNDO_ANCHO, 
+                y: Math.random() * MUNDO_ALTO, 
+                r: 24, vel: 2 + Math.random() 
             });
         }
 
-        // --- EVENTOS ---
         window.addEventListener("keydown", (e) => teclas[e.key.toLowerCase()] = true);
         window.addEventListener("keyup", (e) => teclas[e.key.toLowerCase()] = false);
         window.addEventListener("mousemove", (e) => { mouseX = e.clientX; mouseY = e.clientY; });
-        window.addEventListener("mousedown", (e) => {
+        
+        let lastShot = 0;
+        window.addEventListener("mousedown", () => {
             if(!enJuego) return;
-            let ang = Math.atan2(mouseY - jugador.y, mouseX - jugador.x);
-            balas.push({ x: jugador.x, y: jugador.y, vx: Math.cos(ang)*14, vy: Math.sin(ang)*14 });
+            let ahora = Date.now();
+            let cadencia = jugador.arma === "ak47" ? 120 : (jugador.arma === "sniper" ? 800 : 400);
+            
+            if(ahora - lastShot > cadencia) {
+                let dx = (mouseX + camara.x) - jugador.x;
+                let dy = (mouseY + camara.y) - jugador.y;
+                let ang = Math.atan2(dy, dx);
+                
+                let bVel = jugador.arma === "sniper" ? 25 : 15;
+                balas.push({ x: jugador.x, y: jugador.y, vx: Math.cos(ang)*bVel, vy: Math.sin(ang)*bVel, tipo: jugador.arma });
+                lastShot = ahora;
+            }
         });
 
         function actualizar() {
             if(!enJuego) return;
 
             // Movimiento
-            if (teclas["w"]) jugador.y -= jugador.vel;
-            if (teclas["s"]) jugador.y += jugador.vel;
-            if (teclas["a"]) jugador.x -= jugador.vel;
-            if (teclas["d"]) jugador.x += jugador.vel;
+            if (teclas["w"] && jugador.y > 0) jugador.y -= jugador.vel;
+            if (teclas["s"] && jugador.y < MUNDO_ALTO) jugador.y += jugador.vel;
+            if (teclas["a"] && jugador.x > 0) jugador.x -= jugador.vel;
+            if (teclas["d"] && jugador.x < MUNDO_ANCHO) jugador.x += jugador.vel;
 
-            // FIX PAREDES: No salir del mapa
-            if (jugador.x < jugador.r) jugador.x = jugador.r;
-            if (jugador.x > canvas.width - jugador.r) jugador.x = canvas.width - jugador.r;
-            if (jugador.y < jugador.r) jugador.y = jugador.r;
-            if (jugador.y > canvas.height - jugador.r) jugador.y = canvas.height - jugador.r;
+            // Cámara sigue al jugador
+            camara.x = jugador.x - canvas.width / 2;
+            camara.y = jugador.y - canvas.height / 2;
 
-            // Zombies y Empuje
+            // Zombies
             zombies.forEach((z) => {
                 let dx = jugador.x - z.x;
                 let dy = jugador.y - z.y;
@@ -95,11 +130,10 @@
                 z.y += (dy/dist) * z.vel;
 
                 if(dist < jugador.r + z.r) {
-                    vida -= 0.5;
+                    vida -= 0.6;
                     document.getElementById("vida-bar").style.width = vida + "%";
-                    // Empuje físico mejorado
-                    jugador.x += (dx/dist) * 10;
-                    jugador.y += (dy/dist) * 10;
+                    jugador.x += (dx/dist) * 12;
+                    jugador.y += (dy/dist) * 12;
                     if(vida <= 0) morir();
                 }
             });
@@ -108,11 +142,12 @@
             balas.forEach((b, bi) => {
                 b.x += b.vx; b.y += b.vy;
                 zombies.forEach((z, zi) => {
-                    let dX = b.x - z.x; let dY = b.y - z.y;
-                    if(Math.sqrt(dX*dX + dY*dY) < z.r) {
+                    let d = Math.sqrt((b.x-z.x)**2 + (b.y-z.y)**2);
+                    if(d < z.r) {
                         puntosPartida += 10;
                         document.getElementById("puntos").innerText = puntosPartida;
-                        zombies.splice(zi, 1); balas.splice(bi, 1);
+                        zombies.splice(zi, 1); 
+                        if(b.tipo !== "sniper") balas.splice(bi, 1); // Sniper atraviesa
                         crearZombie();
                     }
                 });
@@ -120,62 +155,64 @@
         }
 
         function dibujar() {
-            // 1. GRID
-            ctx.fillStyle = "#2d2d2d";
-            ctx.fillRect(0,0,canvas.width, canvas.height);
-            ctx.strokeStyle = "#383838";
-            for(let i=0; i<canvas.width; i+=60) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
-            for(let j=0; j<canvas.height; j+=60) { ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(canvas.width,j); ctx.stroke(); }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(-camara.x, -camara.y);
 
-            // 2. JUGADOR CON ARMA (BATTLEDUDES STYLE)
-            let angulo = Math.atan2(mouseY - jugador.y, mouseX - jugador.x);
-            
+            // Fondo (Grid gigante)
+            ctx.fillStyle = "#222";
+            ctx.fillRect(0,0, MUNDO_ANCHO, MUNDO_ALTO);
+            ctx.strokeStyle = "#333";
+            for(let i=0; i<=MUNDO_ANCHO; i+=80) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,MUNDO_ALTO); ctx.stroke(); }
+            for(let j=0; j<=MUNDO_ALTO; j+=80) { ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(MUNDO_ANCHO,j); ctx.stroke(); }
+
+            // Zombies
+            zombies.forEach(z => {
+                ctx.fillStyle = "#ff4757"; ctx.strokeStyle = "#8b0000"; ctx.lineWidth = 4;
+                ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+            });
+
+            // Jugador y Arma
+            let angulo = Math.atan2((mouseY + camara.y) - jugador.y, (mouseX + camara.x) - jugador.x);
             ctx.save();
             ctx.translate(jugador.x, jugador.y);
             ctx.rotate(angulo);
-
-            // DIBUJAR ARMA
-            ctx.fillStyle = "#333";
-            ctx.strokeStyle = "#000";
-            ctx.lineWidth = 2;
-            ctx.fillRect(12, -5, 25, 10);
-            ctx.strokeRect(12, -5, 25, 10);
-
-            // DIBUJAR MANOS
-            ctx.fillStyle = "#00aaff";
-            ctx.strokeStyle = "#0055aa";
-            ctx.beginPath(); ctx.arc(15, -12, 6, 0, Math.PI*2); ctx.fill(); ctx.stroke(); // Mano 1
-            ctx.beginPath(); ctx.arc(15, 12, 6, 0, Math.PI*2); ctx.fill(); ctx.stroke();  // Mano 2
-            
+            // Dibujar arma según tipo
+            ctx.fillStyle = "#111";
+            let largo = jugador.arma === "sniper" ? 45 : (jugador.arma === "ak47" ? 35 : 22);
+            ctx.fillRect(15, -4, largo, 8); 
             ctx.restore();
 
-            // CUERPO JUGADOR
-            ctx.fillStyle = "#00aaff";
-            ctx.strokeStyle = "#0055aa";
-            ctx.lineWidth = 4;
-            ctx.beginPath(); ctx.arc(jugador.x, jugador.y, jugador.r, 0, Math.PI*2);
-            ctx.fill(); ctx.stroke();
+            // Cuerpo
+            ctx.fillStyle = "#3498db"; ctx.strokeStyle = "#2980b9"; ctx.lineWidth = 5;
+            ctx.beginPath(); ctx.arc(jugador.x, jugador.y, jugador.r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
 
-            // 3. ZOMBIES
-            zombies.forEach(z => {
-                ctx.fillStyle = "#ff4444";
-                ctx.strokeStyle = "#880000";
-                ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, Math.PI*2);
-                ctx.fill(); ctx.stroke();
-            });
-
-            // 4. BALAS
-            ctx.fillStyle = "yellow";
+            // Balas
             balas.forEach(b => {
-                ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = b.tipo === "sniper" ? "cyan" : "yellow";
+                ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill();
             });
+
+            ctx.restore();
+        }
+
+        function comprar(arma, precio) {
+            if(banco >= precio) {
+                banco -= precio;
+                armaComprada = arma;
+                localStorage.setItem("banco_io", banco);
+                localStorage.setItem("arma_equipada", arma);
+                document.getElementById("banco-total").innerText = banco;
+                document.getElementById("arma-actual").innerText = arma.toUpperCase();
+                alert("¡COMPRADO!");
+            } else { alert("DINERO INSUFICIENTE EN EL BANCO"); }
         }
 
         function morir() {
             enJuego = false;
             banco += puntosPartida;
             localStorage.setItem("banco_io", banco);
-            alert("GAME OVER! BANCO: $" + banco);
+            alert("TE ELIMINARON. Ganas: $" + puntosPartida);
             location.reload(); 
         }
 
