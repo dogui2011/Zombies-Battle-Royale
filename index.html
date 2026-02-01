@@ -2,171 +2,116 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ZOMBIE BATTLE ROYALE - FULL</title>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <title>Taming Style PVP - Pro Edition</title>
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #1a1a1a; touch-action: none; font-family: sans-serif; }
-        canvas { display: block; background: #2d2d2d; }
-        #ui { position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 5px; z-index: 5; }
-        #menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 25px; border-radius: 15px; text-align: center; z-index: 100; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
-        .btn { padding: 10px 20px; cursor: pointer; background: #2ecc71; border: none; color: white; font-weight: bold; border-radius: 5px; margin: 5px; }
-        input { padding: 8px; border-radius: 5px; border: 1px solid #ccc; margin-bottom: 10px; width: 180px; text-align: center; }
+        body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: Arial; }
+        #ui { position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; pointer-events: none; }
+        #shop { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
+        .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; transition: 0.2s; }
+        .ak47 { background: #d35400; } .sniper { background: #2980b9; } .mg { background: #27ae60; }
+        .btn:hover { transform: scale(1.1); }
     </style>
 </head>
 <body>
-
-    <div id="menu">
-        <h2 style="margin-top:0;">ZOMBIE BATTLE</h2>
-        <p>Tu ID: <b id="mi-id" style="color: #e67e22;">Cargando...</b></p>
-        <input type="text" id="id-amigo" placeholder="ID de tu amigo">
-        <br>
-        <button class="btn" onclick="iniciar(false)">JUGAR SOLO</button>
-        <button class="btn" style="background:#3498db" onclick="iniciar(true)">UNIRSE A AMIGO</button>
+    <div id="ui">ORO: $<span id="oro">50</span> | VIDA: <span id="vida">100</span>%</div>
+    <div id="shop">
+        <button class="btn ak47" onclick="cambiarArma('AK47')">AK-47</button>
+        <button class="btn sniper" onclick="cambiarArma('SNIPER')">SNIPER</button>
+        <button class="btn mg" onclick="cambiarArma('MG')">AMETRALLADORA</button>
     </div>
 
-    <div id="ui">ORO: $<span id="oro">0</span> | VIDA: <span id="vida">100</span>%</div>
-    <canvas id="juego"></canvas>
-
+    <script src="https://pixijs.download/release/pixi.js"></script>
     <script>
-        const canvas = document.getElementById("juego");
-        const ctx = canvas.getContext("2d");
-        const MUNDO = 3000;
-        
-        let enJuego = false, jugador, zombies = [], balas = [], teclas = {}, camara = {x:0, y:0};
-        let otrosJugadores = {}, conexiones = [];
+        (async () => {
+            const app = new PIXI.Application();
+            await app.init({ background: '#1099bb', resizeTo: window, antialias: true });
+            document.body.appendChild(app.canvas);
 
-        // --- MULTIJUGADOR (PeerJS) ---
-        const peer = new Peer();
-        peer.on('open', id => document.getElementById('mi-id').innerText = id);
-        
-        peer.on('connection', conn => {
-            conexiones.push(conn);
-            conn.on('data', data => procesarDatos(data, conn.peer));
-        });
+            // OPTIMIZACIÓN: Contenedores separados
+            const world = new PIXI.Container();
+            app.stage.addChild(world);
+            
+            // EL JUGADOR (Estilo Taming)
+            const player = new PIXI.Container();
+            const body = new PIXI.Graphics().circle(0, 0, 25).fill(0xe67e22).stroke({width:3, color:0x000000});
+            const hL = new PIXI.Graphics().circle(-30, 15, 8).fill(0xd35400).stroke({width:2, color:0x000000});
+            const hR = new PIXI.Graphics().circle(30, 15, 8).fill(0xd35400).stroke({width:2, color:0x000000});
+            player.addChild(body, hL, hR);
+            player.x = 400; player.y = 300;
+            world.addChild(player);
 
-        function enviar(data) {
-            conexiones.forEach(c => { if(c.open) c.send(data); });
-        }
+            let oro = 50;
+            let vida = 100;
+            const keys = {};
+            const zombies = [];
 
-        function procesarDatos(data, id) {
-            if(data.type === 'pos') otrosJugadores[id] = data;
-            if(data.type === 'bala') balas.push({x: data.x, y: data.y, vx: data.vx, vy: data.vy, remoto: true});
-        }
+            // FIX PAREDES: Límites del mapa
+            const MAP_SIZE = 2000;
+            const bounds = new PIXI.Graphics().rect(0, 0, MAP_SIZE, MAP_SIZE).stroke({width:10, color:0x000000});
+            world.addChild(bounds);
 
-        function iniciar(esInvitado) {
-            if(esInvitado) {
-                const idA = document.getElementById('id-amigo').value;
-                if(!idA) return alert("Pega el ID de tu amigo");
-                const conn = peer.connect(idA);
-                conexiones.push(conn);
-                conn.on('data', data => procesarDatos(data, conn.peer));
+            // CREAR ZOMBIES (Sin que se peguen entre ellos)
+            for(let i=0; i<15; i++) {
+                const z = new PIXI.Graphics().circle(0, 0, 20).fill(0x2ecc71).stroke({width:3, color:0x000000});
+                z.x = Math.random() * MAP_SIZE;
+                z.y = Math.random() * MAP_SIZE;
+                zombies.push(z);
+                world.addChild(z);
             }
 
-            document.getElementById('menu').style.display = 'none';
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            
-            jugador = { x: MUNDO/2, y: MUNDO/2, r: 25, vel: 5, vida: 100, oro: 0, ang: 0 };
-            for(let i=0; i<20; i++) spawnZombie();
-            
-            enJuego = true;
-            bucle();
-        }
+            window.addEventListener('keydown', (e) => keys[e.code] = true);
+            window.addEventListener('keyup', (e) => keys[e.code] = false);
 
-        // --- CONTROLES ---
-        window.addEventListener("keydown", e => teclas[e.key.toLowerCase()] = true);
-        window.addEventListener("keyup", e => teclas[e.key.toLowerCase()] = false);
-        window.addEventListener("mousedown", () => { if(enJuego) disparar(); });
-        window.addEventListener("mousemove", e => {
-            if(enJuego) {
-                jugador.ang = Math.atan2((e.clientY + camara.y) - jugador.y, (e.clientX + camara.x) - jugador.x);
-            }
-        });
+            // BUCLE PRINCIPAL (Game Loop)
+            app.ticker.add((delta) => {
+                const speed = 5 * delta.deltaTime;
+                let nextX = player.x;
+                let nextY = player.y;
 
-        function disparar() {
-            let vx = Math.cos(jugador.ang) * 12;
-            let vy = Math.sin(jugador.ang) * 12;
-            balas.push({ x: jugador.x, y: jugador.y, vx, vy });
-            enviar({ type: 'bala', x: jugador.x, y: jugador.y, vx, vy });
-        }
+                if (keys['KeyW']) nextY -= speed;
+                if (keys['KeyS']) nextY += speed;
+                if (keys['KeyA']) nextX -= speed;
+                if (keys['KeyD']) nextX += speed;
 
-        function actualizar() {
-            if(teclas['w']) jugador.y -= jugador.vel;
-            if(teclas['s']) jugador.y += jugador.vel;
-            if(teclas['a']) jugador.x -= jugador.vel;
-            if(teclas['d']) jugador.x += jugador.vel;
+                // ANTIPASAR PAREDES
+                if (nextX > 25 && nextX < MAP_SIZE - 25) player.x = nextX;
+                if (nextY > 25 && nextY < MAP_SIZE - 25) player.y = nextY;
 
-            camara.x = jugador.x - canvas.width/2;
-            camara.y = jugador.y - canvas.height/2;
+                // CAMARA SIGUE AL JUGADOR
+                world.x = -player.x + app.screen.width / 2;
+                world.y = -player.y + app.screen.height / 2;
 
-            enviar({ type: 'pos', x: jugador.x, y: jugador.y, ang: jugador.ang });
-
-            // Balas y Zombies
-            balas = balas.filter(b => b.x > 0 && b.x < MUNDO && b.y > 0 && b.y < MUNDO);
-            balas.forEach((b, bi) => {
-                b.x += b.vx; b.y += b.vy;
-                zombies.forEach((z, zi) => {
-                    if(Math.hypot(b.x - z.x, b.y - z.y) < 25) {
-                        zombies.splice(zi, 1);
-                        balas.splice(bi, 1);
-                        jugador.oro += 10;
-                        document.getElementById('oro').innerText = jugador.oro;
-                        spawnZombie();
+                // LÓGICA DE ZOMBIES ANTI-LAG
+                zombies.forEach(z => {
+                    const dx = player.x - z.x;
+                    const dy = player.y - z.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    
+                    if(dist < 500) { // Solo se mueven si estás cerca (Ahorra CPU)
+                        z.x += (dx / dist) * 2;
+                        z.y += (dy / dist) * 2;
+                        
+                        // Si te tocan, no se "enciman", rebotan
+                        if(dist < 40) {
+                            vida -= 0.1;
+                            document.getElementById('vida').innerText = Math.max(0, Math.floor(vida));
+                        }
                     }
                 });
             });
 
-            zombies.forEach(z => {
-                let d = Math.hypot(jugador.x - z.x, jugador.y - z.y);
-                z.x += (jugador.x - z.x)/d * 2;
-                z.y += (jugador.y - z.y)/d * 2;
-                if(d < 40) {
-                    jugador.vida -= 0.1;
-                    document.getElementById('vida').innerText = Math.floor(jugador.vida);
-                    if(jugador.vida <= 0) location.reload();
-                }
+            // ROTACIÓN AL MOUSE
+            app.stage.eventMode = 'static';
+            app.stage.on('pointermove', (e) => {
+                const pos = e.global;
+                player.rotation = Math.atan2(pos.y - app.screen.height/2, pos.x - app.screen.width/2) + Math.PI/2;
             });
+        })();
+
+        function cambiarArma(tipo) {
+            console.log("Arma equipada: " + tipo);
+            // Aquí añadiremos el cambio visual después
         }
-
-        function dibujar() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.save();
-            ctx.translate(-camara.x, -camara.y);
-
-            // Suelo
-            ctx.strokeStyle = "#444";
-            for(let i=0; i<=MUNDO; i+=100) {
-                ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,MUNDO); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(MUNDO,i); ctx.stroke();
-            }
-
-            // Enemigos (Puntos rojos)
-            for(let id in otrosJugadores) {
-                let o = otrosJugadores[id];
-                ctx.fillStyle = "red"; ctx.beginPath(); ctx.arc(o.x, o.y, 25, 0, Math.PI*2); ctx.fill();
-            }
-
-            // Jugador y Zombies
-            ctx.fillStyle = "#3498db"; ctx.beginPath(); ctx.arc(jugador.x, jugador.y, 25, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = "#2ecc71"; zombies.forEach(z => { ctx.beginPath(); ctx.arc(z.x, z.y, 20, 0, Math.PI*2); ctx.fill(); });
-            ctx.fillStyle = "yellow"; balas.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill(); });
-
-            ctx.restore();
-
-            // --- MINIMAPA ---
-            const mEscala = 0.05, mTam = MUNDO * mEscala;
-            const mX = canvas.width - mTam - 20, mY = 20;
-            ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(mX, mY, mTam, mTam);
-            ctx.strokeStyle = "white"; ctx.strokeRect(mX, mY, mTam, mTam);
-            
-            // Puntos Minimapa
-            ctx.fillStyle = "#3498db"; ctx.fillRect(mX + jugador.x*mEscala - 2, mY + jugador.y*mEscala - 2, 4, 4);
-            ctx.fillStyle = "red"; for(let id in otrosJugadores) ctx.fillRect(mX + otrosJugadores[id].x*mEscala - 2, mY + otrosJugadores[id].y*mEscala - 2, 4, 4);
-        }
-
-        function spawnZombie() { zombies.push({ x: Math.random()*MUNDO, y: Math.random()*MUNDO }); }
-        function bucle() { if(enJuego) { actualizar(); dibujar(); requestAnimationFrame(bucle); } }
     </script>
 </body>
 </html>
