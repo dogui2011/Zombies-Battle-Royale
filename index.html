@@ -2,46 +2,55 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>TAMING ZOMBIES - Estilo IO</title>
+    <title>SURVIVAL DUDES - Estilo IO</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #1a1a1a; font-family: 'Arial Black', sans-serif; }
-        canvas { display: none; background: #2d2d2d; cursor: crosshair; }
+        canvas { display: none; background: #2d2d2d; }
         
+        /* MENU PRINCIPAL */
         #menu { 
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             height: 100%; color: white; text-align: center;
-            background: radial-gradient(circle, #2ecc71 0%, #1a1a1a 100%);
+            background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url('https://img.freepik.com/vector-gratis/fondo-plano-batalla-zombis_23-2149114675.jpg');
+            background-size: cover;
         }
 
         .btn {
-            background: #2ecc71; border: none; padding: 15px 40px; color: white;
-            font-size: 24px; cursor: pointer; border-radius: 50px; margin: 10px;
-            transition: 0.2s; border-bottom: 5px solid #27ae60; text-transform: uppercase;
+            background: #e74c3c; border: none; padding: 15px 40px; color: white;
+            font-size: 24px; cursor: pointer; border-radius: 10px; margin: 10px;
+            transition: 0.2s; border-bottom: 5px solid #c0392b; text-transform: uppercase;
         }
-        .btn:hover { background: #27ae60; transform: scale(1.05); }
+        .btn:hover { background: #ff5e4d; transform: scale(1.05); }
 
+        /* UI JUEGO */
         #ui-juego { position: absolute; top: 10px; left: 20px; color: white; display: none; pointer-events: none; }
-        .stats { font-size: 20px; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 10px; margin-bottom: 5px; border-left: 5px solid gold; }
+        .stats { font-size: 22px; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 8px; border-left: 5px solid #e74c3c; }
         
-        /* BARRA DE VIDA ESTILO IO */
-        #vida-container { width: 200px; height: 20px; background: #444; border-radius: 10px; overflow: hidden; border: 2px solid #fff; }
-        #vida-bar { width: 100%; height: 100%; background: #ff4444; transition: 0.3s; }
+        #mini-mapa {
+            position: absolute; bottom: 20px; right: 20px;
+            width: 150px; height: 150px; background: rgba(0,0,0,0.8);
+            border: 2px solid white; display: none;
+        }
     </style>
 </head>
 <body>
 
     <div id="menu">
-        <h1 style="font-size: 60px; text-shadow: 4px 4px #000;">TAMING ZOMBIES</h1>
-        <div style="font-size: 25px; color: gold; margin-bottom: 20px;">BANCO: $<span id="banco-total">0</span></div>
-        <button class="btn" onclick="empezarJuego()">JUGAR</button>
-        <button class="btn" style="background:#f1c40f; border-color:#d4ac0d;" onclick="comprar()">AMETRALLADORA ($100)</button>
+        <h1 style="font-size: 70px; text-shadow: 5px 5px #000;">SURVIVAL DUDES</h1>
+        <p style="letter-spacing: 3px;">INSPIRADO EN BATTLEDUDES & TAMING</p>
+        <div id="banco-info" style="font-size: 24px; color: gold; margin: 15px;">BANCO: $<span id="banco-total">0</span></div>
+        <button class="btn" onclick="empezarJuego()">ENTRAR AL MAPA</button>
     </div>
 
     <div id="ui-juego">
-        <div class="stats">DINERO: $<span id="puntos">0</span></div>
-        <div id="vida-container"><div id="vida-bar"></div></div>
-        <div id="municion" style="color: #00ff00; margin-top: 5px;">ARMA: BÁSICA</div>
+        <div class="stats">SCORE: $<span id="puntos">0</span></div>
+        <div style="margin-top:10px; font-size:14px; color:#ff4444;">VIDA</div>
+        <div style="width:200px; height:15px; background:#444; border-radius:10px; border:2px solid #fff;">
+            <div id="vida-bar" style="width:100%; height:100%; background:#ff4444; transition: 0.2s;"></div>
+        </div>
     </div>
+
+    <div id="mini-mapa"><div id="punto-mini" style="width:5px; height:5px; background:cyan; position:absolute;"></div></div>
 
     <canvas id="juego"></canvas>
 
@@ -51,62 +60,73 @@
         const menu = document.getElementById("menu");
         const ui = document.getElementById("ui-juego");
 
-        let banco = parseInt(localStorage.getItem("banco_io")) || 0;
+        // CONFIGURACIÓN DEL MAPA (Battledudes style)
+        const MAPA_ANCHO = 3000;
+        const MAPA_ALTO = 3000;
+        let camara = { x: 0, y: 0 };
+
+        let banco = parseInt(localStorage.getItem("survival_banco")) || 0;
         document.getElementById("banco-total").innerText = banco;
 
-        let enJuego = false, armaEquipada = "basica", vida = 100;
-        let jugador, zombies, balas, monedas, teclas, puntosPartida, balasExtra;
+        let enJuego = false, vida = 100, puntosPartida = 0;
+        let jugador, zombies, balas, monedas, teclas;
 
         function empezarJuego() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            enJuego = true; vida = 100; puntosPartida = 0; balasExtra = 200;
+            enJuego = true; vida = 100; puntosPartida = 0;
             menu.style.display = "none"; canvas.style.display = "block"; ui.style.display = "block";
+            document.getElementById("mini-mapa").style.display = "block";
             
-            jugador = { x: canvas.width/2, y: canvas.height/2, r: 20, vel: 5 };
+            jugador = { x: MAPA_ANCHO/2, y: MAPA_ALTO/2, r: 25, vel: 6 };
             zombies = []; balas = []; monedas = []; teclas = {};
-            for(let i=0; i<6; i++) crearZombie();
+            
+            for(let i=0; i<15; i++) crearZombie();
             requestAnimationFrame(bucle);
         }
 
         function crearZombie() {
             zombies.push({ 
-                x: Math.random() * canvas.width, 
-                y: Math.random() < 0.5 ? -50 : canvas.height + 50, 
-                r: 22, vel: 2 + Math.random() 
+                x: Math.random() * MAPA_ANCHO, 
+                y: Math.random() * MAPA_ALTO, 
+                r: 28, vel: 2.5 + Math.random() 
             });
         }
 
         window.addEventListener("keydown", (e) => teclas[e.key.toLowerCase()] = true);
         window.addEventListener("keyup", (e) => teclas[e.key.toLowerCase()] = false);
 
-        let lastShot = 0;
         window.addEventListener("mousedown", (e) => {
             if(!enJuego) return;
-            let ahora = Date.now();
-            let delay = armaEquipada === "pro" ? 100 : 400;
+            // Cálculo de ángulo tomando en cuenta la cámara
+            let mouseX = e.clientX + camara.x;
+            let mouseY = e.clientY + camara.y;
+            let ang = Math.atan2(mouseY - jugador.y, mouseX - jugador.x);
             
-            if(ahora - lastShot > delay) {
-                if(armaEquipada === "pro") {
-                    balasExtra--;
-                    if(balasExtra <= 0) armaEquipada = "basica";
-                }
-                let ang = Math.atan2(e.clientY - jugador.y, e.clientX - jugador.x);
-                balas.push({ x: jugador.x, y: jugador.y, vx: Math.cos(ang)*12, vy: Math.sin(ang)*12, color: armaEquipada === "pro" ? "#ff0000" : "#ffff00" });
-                lastShot = ahora;
-            }
+            balas.push({ 
+                x: jugador.x, y: jugador.y, 
+                vx: Math.cos(ang)*15, vy: Math.sin(ang)*15 
+            });
         });
 
         function actualizar() {
             if(!enJuego) return;
 
-            // Movimiento
-            if (teclas["w"] && jugador.y > 20) jugador.y -= jugador.vel;
-            if (teclas["s"] && jugador.y < canvas.height-20) jugador.y += jugador.vel;
-            if (teclas["a"] && jugador.x > 20) jugador.x -= jugador.vel;
-            if (teclas["d"] && jugador.x < canvas.width-20) jugador.x += jugador.vel;
+            // Movimiento con límites de mapa (Battledudes)
+            if (teclas["w"] && jugador.y > 0) jugador.y -= jugador.vel;
+            if (teclas["s"] && jugador.y < MAPA_ALTO) jugador.y += jugador.vel;
+            if (teclas["a"] && jugador.x > 0) jugador.x -= jugador.vel;
+            if (teclas["d"] && jugador.x < MAPA_ANCHO) jugador.x += jugador.vel;
 
-            // Zombies con físicas de empuje
+            // La cámara sigue al jugador
+            camara.x = jugador.x - canvas.width/2;
+            camara.y = jugador.y - canvas.height/2;
+
+            // Mini-mapa logic
+            document.getElementById("punto-mini").style.left = (jugador.x / MAPA_ANCHO * 100) + "%";
+            document.getElementById("punto-mini").style.top = (jugador.y / MAPA_ALTO * 100) + "%";
+
+            // IA Zombies y Colisiones
             zombies.forEach((z) => {
                 let dx = jugador.x - z.x;
                 let dy = jugador.y - z.y;
@@ -114,13 +134,12 @@
                 z.x += (dx/dist) * z.vel;
                 z.y += (dy/dist) * z.vel;
 
-                // Colisión Jugador vs Zombie (Física de rebote)
                 if(dist < jugador.r + z.r) {
-                    vida -= 0.5;
+                    vida -= 0.4;
                     document.getElementById("vida-bar").style.width = vida + "%";
                     // Empuje físico
-                    jugador.x += (dx/dist) * 10;
-                    jugador.y += (dy/dist) * 10;
+                    jugador.x += (dx/dist) * 12;
+                    jugador.y += (dy/dist) * 12;
                     if(vida <= 0) morir();
                 }
             });
@@ -140,7 +159,7 @@
 
             // Recoger Monedas
             monedas.forEach((m, mi) => {
-                if(Math.sqrt(Math.pow(jugador.x-m.x,2)+Math.pow(jugador.y-m.y,2)) < 40) {
+                if(Math.sqrt(Math.pow(jugador.x-m.x,2)+Math.pow(jugador.y-m.y,2)) < 50) {
                     puntosPartida += 10;
                     document.getElementById("puntos").innerText = puntosPartida;
                     monedas.splice(mi, 1);
@@ -149,58 +168,50 @@
         }
 
         function dibujar() {
-            // Fondo de cuadrícula estilo IO
-            ctx.fillStyle = "#2d2d2d";
-            ctx.fillRect(0,0,canvas.width, canvas.height);
-            ctx.strokeStyle = "#333";
-            for(let i=0; i<canvas.width; i+=50) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
-            for(let j=0; j<canvas.height; j+=50) { ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(canvas.width,j); ctx.stroke(); }
+            ctx.save();
+            ctx.translate(-camara.x, -camara.y); // MOVER TODO SEGÚN LA CÁMARA
 
-            // Monedas (Círculos dorados)
+            // Suelo con Grid
+            ctx.fillStyle = "#2d2d2d";
+            ctx.fillRect(0,0, MAPA_ANCHO, MAPA_ALTO);
+            ctx.strokeStyle = "#383838";
+            for(let i=0; i<=MAPA_ANCHO; i+=100) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,MAPA_ALTO); ctx.stroke(); }
+            for(let j=0; j<=MAPA_ALTO; j+=100) { ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(MAPA_ANCHO,j); ctx.stroke(); }
+
+            // Bordes del Mapa (Rojos)
+            ctx.strokeStyle = "red"; ctx.lineWidth = 10;
+            ctx.strokeRect(0,0, MAPA_ANCHO, MAPA_ALTO);
+
+            // Monedas
             monedas.forEach(m => {
                 ctx.fillStyle = "gold"; ctx.beginPath();
-                ctx.arc(m.x, m.y, 8, 0, Math.PI*2); ctx.fill();
+                ctx.arc(m.x, m.y, 10, 0, Math.PI*2); ctx.fill();
             });
 
-            // Jugador (Estilo Taming.io)
-            ctx.lineWidth = 5;
-            ctx.strokeStyle = "#0055aa";
-            ctx.fillStyle = "#00aaff";
+            // Zombies (Estilo IO)
+            zombies.forEach(z => {
+                ctx.lineWidth = 4; ctx.strokeStyle = "#600"; ctx.fillStyle = "#e74c3c";
+                ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+            });
+
+            // Jugador (Estilo Taming/Battledudes)
+            ctx.lineWidth = 4; ctx.strokeStyle = "#0055aa"; ctx.fillStyle = "#00aaff";
             ctx.beginPath(); ctx.arc(jugador.x, jugador.y, jugador.r, 0, Math.PI*2);
             ctx.fill(); ctx.stroke();
 
-            // Zombies (Círculos rojos)
-            zombies.forEach(z => {
-                ctx.strokeStyle = "#880000";
-                ctx.fillStyle = "#ff4444";
-                ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, Math.PI*2);
-                ctx.fill(); ctx.stroke();
-            });
-
             // Balas
-            balas.forEach(b => {
-                ctx.fillStyle = b.color;
-                ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill();
-            });
+            ctx.fillStyle = "yellow";
+            balas.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 6, 0, Math.PI*2); ctx.fill(); });
+
+            ctx.restore();
         }
 
         function morir() {
             enJuego = false;
             banco += puntosPartida;
-            localStorage.setItem("banco_io", banco);
-            document.getElementById("banco-total").innerText = banco;
-            alert("FIN DE LA PARTIDA. Ganas: $" + puntosPartida);
+            localStorage.setItem("survival_banco", banco);
+            alert("FUISTE ELIMINADO. Score: $" + puntosPartida);
             location.reload(); 
-        }
-
-        function comprar() {
-            if(banco >= 100) {
-                banco -= 100;
-                localStorage.setItem("banco_io", banco);
-                armaEquipada = "pro";
-                document.getElementById("banco-total").innerText = banco;
-                alert("¡EQUIPADA PARA LA PRÓXIMA RONDA!");
-            } else { alert("DINERO INSUFICIENTE"); }
         }
 
         function bucle() { if(enJuego) { actualizar(); dibujar(); requestAnimationFrame(bucle); } }
