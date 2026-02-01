@@ -2,113 +2,178 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Zombies BR - Fullscreen & Coins</title>
+    <title>Zombies BR - Estilo Taming</title>
     <style>
-        /* Pantalla completa y sin bordes feos */
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
-        canvas { display: block; background: #000; }
-        #ui { position: absolute; top: 10px; left: 10px; color: lime; font-family: sans-serif; pointer-events: none; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #1a1a1a; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        canvas { display: none; background: #000; }
+        
+        /* Pantalla de Inicio */
+        #menu { 
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100%; color: white; text-align: center;
+            background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('https://images.unsplash.com/photo-1509248961158-e54f6934749c?q=80&w=1000&auto=format&fit=crop');
+            background-size: cover;
+        }
+
+        .btn {
+            background: #2ecc71; border: none; padding: 15px 40px; color: white;
+            font-size: 24px; cursor: pointer; border-radius: 10px; margin: 10px;
+            transition: 0.3s; box-shadow: 0 5px #27ae60;
+        }
+        .btn:hover { background: #27ae60; transform: scale(1.1); }
+        .btn-tienda { background: #f1c40f; box-shadow: 0 5px #f39c12; }
+
+        #ui-juego { position: absolute; top: 10px; left: 10px; color: white; display: none; pointer-events: none; }
     </style>
 </head>
 <body>
-    <div id="ui">
-        <h1>ZOMBIES BATTLE ROYALE</h1>
-        <p>Monedas: <span id="puntos">0</span></p>
-        <p>WASD para mover | Clic para disparar</p>
+
+    <div id="menu">
+        <h1 style="font-size: 60px; color: #e74c3c; text-shadow: 3px 3px #000;">ZOMBIES BATTLE ROYALE</h1>
+        <p>Inspirado en Taming.io</p>
+        <div id="stats-menu">
+            <p>Monedas en Banco: <span id="banco-monedas">0</span></p>
+        </div>
+        <button class="btn" onclick="empezarJuego()">¡JUGAR AHORA!</button>
+        <button class="btn btn-tienda" onclick="abrirTienda()">TIENDA DE ARMAS</button>
     </div>
+
+    <div id="ui-juego">
+        <h2 style="margin:0">Monedas: <span id="puntos">0</span></h2>
+        <p>Arma: <span id="arma-nombre">Pistola</span></p>
+    </div>
+
     <canvas id="juego"></canvas>
 
     <script>
         const canvas = document.getElementById("juego");
         const ctx = canvas.getContext("2d");
-        const puntosTxt = document.getElementById("puntos");
+        const menu = document.getElementById("menu");
+        const ui = document.getElementById("ui-juego");
 
-        // Ajustar canvas al tamaño de la pantalla
-        function ajustarPantalla() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+        let enJuego = false;
+        let banco = 0;
+        let puntosPartida = 0;
+        let armaActual = { nombre: "Pistola", cadencia: 400, colorBala: "yellow" };
+
+        let jugador, zombies, balas, monedas, teclas;
+
+        function ajustar() { 
+            canvas.width = window.innerWidth; 
+            canvas.height = window.innerHeight; 
         }
-        window.addEventListener("resize", ajustarPantalla);
-        ajustarPantalla();
+        window.addEventListener("resize", ajustar);
 
-        let score = 0;
-        let jugador = { x: canvas.width/2, y: canvas.height/2, tam: 30, color: "#0077ff", vel: 5 };
-        let zombie = { x: 50, y: 50, tam: 60, color: "red", vel: 2.5 };
-        let balas = [];
-        let monedas = [];
+        function empezarJuego() {
+            ajustar();
+            enJuego = true;
+            menu.style.display = "none";
+            canvas.style.display = "block";
+            ui.style.display = "block";
+            
+            puntosPartida = 0;
+            document.getElementById("puntos").innerText = "0";
+            
+            // Inicializar objetos
+            jugador = { x: canvas.width/2, y: canvas.height/2, tam: 30, vel: 5 };
+            zombies = [];
+            balas = [];
+            monedas = [];
+            teclas = {};
 
-        let teclas = {};
+            for(let i=0; i<5; i++) crearZombie();
+            bucle();
+        }
+
+        function crearZombie() {
+            zombies.push({ 
+                x: Math.random() * canvas.width, 
+                y: Math.random() < 0.5 ? -50 : canvas.height + 50, 
+                tam: 40, vel: 2 
+            });
+        }
+
         window.addEventListener("keydown", (e) => teclas[e.key.toLowerCase()] = true);
         window.addEventListener("keyup", (e) => teclas[e.key.toLowerCase()] = false);
 
+        // Sistema de Disparo con el arma actual
+        let ultimoDisparo = 0;
         window.addEventListener("mousedown", (e) => {
-            const angulo = Math.atan2(e.clientY - (jugador.y + 15), e.clientX - (jugador.x + 15));
-            balas.push({ x: jugador.x + 15, y: jugador.y + 15, vx: Math.cos(angulo) * 10, vy: Math.sin(angulo) * 10 });
+            if(!enJuego) return;
+            const ahora = Date.now();
+            if(ahora - ultimoDisparo > armaActual.cadencia) {
+                const ang = Math.atan2(e.clientY - jugador.y, e.clientX - jugador.x);
+                balas.push({ x: jugador.x, y: jugador.y, vx: Math.cos(ang) * 12, vy: Math.sin(ang) * 12 });
+                ultimoDisparo = ahora;
+            }
         });
 
         function actualizar() {
-            // Movimiento con MUROS (No se sale de la pantalla)
+            if(!enJuego) return;
+
             if (teclas["w"] && jugador.y > 0) jugador.y -= jugador.vel;
-            if (teclas["s"] && jugador.y < canvas.height - jugador.tam) jugador.y += jugador.vel;
+            if (teclas["s"] && jugador.y < canvas.height - 30) jugador.y += jugador.vel;
             if (teclas["a"] && jugador.x > 0) jugador.x -= jugador.vel;
-            if (teclas["d"] && jugador.x < canvas.width - jugador.tam) jugador.x += jugador.vel;
+            if (teclas["d"] && jugador.x < canvas.width - 30) jugador.x += jugador.vel;
 
-            // Zombie persiguiendo
-            if (zombie.x < jugador.x) zombie.x += zombie.vel;
-            if (zombie.x > jugador.x) zombie.x -= zombie.vel;
-            if (zombie.y < jugador.y) zombie.y += zombie.vel;
-            if (zombie.y > jugador.y) zombie.y -= zombie.vel;
+            zombies.forEach((z, zi) => {
+                let dx = jugador.x - z.x;
+                let dy = jugador.y - z.y;
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                z.x += (dx/dist) * z.vel;
+                z.y += (dy/dist) * z.vel;
 
-            // Balas y Colisión con Zombie
-            balas.forEach((b, i) => {
+                if(dist < 30) morir();
+            });
+
+            balas.forEach((b, bi) => {
                 b.x += b.vx; b.y += b.vy;
-                if (b.x > zombie.x && b.x < zombie.x + zombie.tam && b.y > zombie.y && b.y < zombie.y + zombie.tam) {
-                    // El zombie muere y suelta moneda
-                    monedas.push({ x: zombie.x + 20, y: zombie.y + 20 });
-                    zombie.x = Math.random() * canvas.width;
-                    zombie.y = Math.random() * canvas.height;
-                    balas.splice(i, 1);
-                }
+                zombies.forEach((z, zi) => {
+                    if(b.x > z.x && b.x < z.x + z.tam && b.y > z.y && b.y < z.y + z.tam) {
+                        monedas.push({x: z.x, y: z.y});
+                        zombies.splice(zi, 1);
+                        balas.splice(bi, 1);
+                        crearZombie();
+                    }
+                });
             });
 
-            // Recoger Monedas
-            monedas.forEach((m, i) => {
-                if (Math.abs(jugador.x - m.x) < 30 && Math.abs(jugador.y - m.y) < 30) {
-                    score += 10;
-                    puntosTxt.innerText = score;
-                    monedas.splice(i, 1);
+            monedas.forEach((m, mi) => {
+                if(Math.abs(jugador.x - m.x) < 40) {
+                    puntosPartida += 10;
+                    document.getElementById("puntos").innerText = puntosPartida;
+                    monedas.splice(mi, 1);
                 }
             });
-
-            // Si el zombie te toca
-            if (Math.abs(jugador.x - zombie.x) < 40 && Math.abs(jugador.y - zombie.y) < 40) {
-                score = 0; puntosTxt.innerText = score;
-                jugador.x = canvas.width/2; jugador.y = canvas.height/2;
-            }
         }
 
         function dibujar() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            // Jugador
-            ctx.fillStyle = jugador.color;
-            ctx.fillRect(jugador.x, jugador.y, jugador.tam, jugador.tam);
-            // Zombie
-            ctx.fillStyle = zombie.color;
-            ctx.fillRect(zombie.x, zombie.y, zombie.tam, zombie.tam);
-            // Balas
-            ctx.fillStyle = "yellow";
-            balas.forEach(b => ctx.fillRect(b.x, b.y, 6, 6));
-            // Monedas
-            ctx.fillStyle = "gold";
-            monedas.forEach(m => {
-                ctx.beginPath();
-                ctx.arc(m.x, m.y, 10, 0, Math.PI*2);
-                ctx.fill();
-            });
+            ctx.fillStyle = "#0077ff"; ctx.fillRect(jugador.x, jugador.y, 30, 30);
+            ctx.fillStyle = "red"; zombies.forEach(z => ctx.fillRect(z.x, z.y, 40, 40));
+            ctx.fillStyle = armaActual.colorBala; balas.forEach(b => ctx.fillRect(b.x, b.y, 6, 6));
+            ctx.fillStyle = "gold"; monedas.forEach(m => { ctx.beginPath(); ctx.arc(m.x, m.y, 8, 0, 7); ctx.fill(); });
         }
 
-        function bucle() { actualizar(); dibujar(); requestAnimationFrame(bucle); }
-        bucle();
+        function morir() {
+            alert("¡PERDISTE TUS MONEDAS!");
+            enJuego = false;
+            canvas.style.display = "none";
+            ui.style.display = "none";
+            menu.style.display = "flex";
+        }
+
+        function abrirTienda() {
+            alert("PRÓXIMAMENTE: Compra la Metralleta por 100 monedas.");
+        }
+
+        function bucle() {
+            if(enJuego) {
+                actualizar();
+                dibujar();
+                requestAnimationFrame(bucle);
+            }
+        }
     </script>
 </body>
 </html>
