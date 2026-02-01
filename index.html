@@ -1,15 +1,69 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-    <title>Zombies BR</title>
+    <meta charset="UTF-8">
+    <title>Zombies BR - Movimiento</title>
     <style>
-        body { background: black; color: lime; text-align: center; font-family: sans-serif; }
-        canvas { background: #222; border: 2px solid white; }
+        body { background: #1a1a1a; color: lime; text-align: center; font-family: sans-serif; overflow: hidden; }
+        canvas { background: #000; border: 3px solid #555; display: block; margin: 0 auto; }
     </style>
 </head>
 <body>
     <h1>Zombies Battle Royale</h1>
-    <p>¡Próximamente!</p>
-    <canvas id="game" width="400" height="300"></canvas>
+    <p>Mueve al sobreviviente con las flechas o WASD</p>
+    <canvas id="juego" width="600" height="400"></canvas>
+
+    <script>
+        const canvas = document.getElementById("juego");
+        const ctx = canvas.getContext("2d");
+
+        // Configuración del jugador
+        let jugador = {
+            x: 300,
+            y: 200,
+            tamano: 30,
+            color: "#0077ff",
+            velocidad: 5
+        };
+
+        // Control de teclas
+        let teclas = {};
+        window.addEventListener("keydown", (e) => teclas[e.key] = true);
+        window.addEventListener("keyup", (e) => teclas[e.key] = false);
+
+        function actualizar() {
+            // Movimiento
+            if (teclas["ArrowUp"] || teclas["w"]) jugador.y -= jugador.velocidad;
+            if (teclas["ArrowDown"] || teclas["s"]) jugador.y += jugador.velocidad;
+            if (teclas["ArrowLeft"] || teclas["a"]) jugador.x -= jugador.velocidad;
+            if (teclas["ArrowRight"] || teclas["d"]) jugador.x += jugador.velocidad;
+
+            // No salirse de los bordes
+            if (jugador.x < 0) jugador.x = 0;
+            if (jugador.x > canvas.width - jugador.tamano) jugador.x = canvas.width - jugador.tamano;
+            if (jugador.y < 0) jugador.y = 0;
+            if (jugador.y > canvas.height - jugador.tamano) jugador.y = canvas.height - jugador.tamano;
+        }
+
+        function dibujar() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Limpiar pantalla
+            
+            // Dibujar jugador
+            ctx.fillStyle = jugador.color;
+            ctx.fillRect(jugador.x, jugador.y, jugador.tamano, jugador.tamano);
+            
+            // Efecto de brillo al jugador
+            ctx.strokeStyle = "white";
+            ctx.strokeRect(jugador.x, jugador.y, jugador.tamano, jugador.tamano);
+        }
+
+        function buclePrincipal() {
+            actualizar();
+            dibujar();
+            requestAnimationFrame(buclePrincipal);
+        }
+
+        buclePrincipal(); // ¡Arranca el juego!
+    </script>
 </body>
 </html>
