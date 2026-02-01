@@ -2,52 +2,70 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Zombies BR - ¡Sobrevive!</title>
+    <title>Zombies BR - GIGANTES</title>
     <style>
-        body { background: #1a1a1a; color: lime; text-align: center; font-family: sans-serif; overflow: hidden; }
-        canvas { background: #000; border: 3px solid #555; display: block; margin: 0 auto; }
+        body { background: #1a1a1a; color: #ff0000; text-align: center; font-family: 'Courier New', Courier, monospace; overflow: hidden; }
+        canvas { background: #000; border: 5px solid #ff0000; display: block; margin: 0 auto; box-shadow: 0 0 20px red; }
     </style>
 </head>
 <body>
-    <h1>Zombies Battle Royale</h1>
-    <p>¡Huye del cuadrado ROJO!</p>
-    <canvas id="juego" width="600" height="400"></canvas>
+    <h1>ZOMBIE GIGANTE ATACA</h1>
+    <p>¡Cuidado! El zombie rojo es enorme y tiene hambre.</p>
+    <canvas id="juego" width="800" height="500"></canvas>
 
     <script>
         const canvas = document.getElementById("juego");
         const ctx = canvas.getContext("2d");
 
-        let jugador = { x: 300, y: 200, tam: 30, color: "#0077ff", vel: 5 };
-        let zombie = { x: 10, y: 10, tam: 30, color: "red", vel: 2 };
+        // Jugador (Azul)
+        let jugador = { x: 400, y: 250, tam: 30, color: "#0077ff", vel: 6 };
+        
+        // ZOMBIE GIGANTE (Rojo) - ¡Aquí le subí el tamaño!
+        let zombie = { x: 50, y: 50, tam: 60, color: "red", vel: 2.5 };
 
         let teclas = {};
         window.addEventListener("keydown", (e) => teclas[e.key] = true);
         window.addEventListener("keyup", (e) => teclas[e.key] = false);
 
         function actualizar() {
-            if (teclash["ArrowUp"] || teclas["w"]) jugador.y -= jugador.vel;
-            if (teclash["ArrowDown"] || teclas["s"]) jugador.y += jugador.vel;
-            if (teclash["ArrowLeft"] || teclas["a"]) jugador.x -= jugador.vel;
-            if (teclash["ArrowRight"] || teclas["d"]) jugador.x += jugador.vel;
+            // Movimiento Jugador
+            if (teclas["ArrowUp"] || teclas["w"]) jugador.y -= jugador.vel;
+            if (teclas["ArrowDown"] || teclas["s"]) jugador.y += jugador.vel;
+            if (teclas["ArrowLeft"] || teclas["a"]) jugador.x -= jugador.vel;
+            if (teclas["ArrowRight"] || teclas["d"]) jugador.x += jugador.vel;
 
+            // IA del Zombie Gigante
             if (zombie.x < jugador.x) zombie.x += zombie.vel;
             if (zombie.x > jugador.x) zombie.x -= zombie.vel;
             if (zombie.y < jugador.y) zombie.y += zombie.vel;
             if (zombie.y > jugador.y) zombie.y -= zombie.vel;
             
-            if (Math.abs(jugador.x - zombie.x) < 30 && Math.abs(jugador.y - zombie.y) < 30) {
-                alert("¡TE COMIERON EL CEREBRO!");
-                jugador.x = 300; jugador.y = 200;
-                zombie.x = 10; zombie.y = 10;
+            // Colisión (Si el zombie te alcanza)
+            if (jugador.x < zombie.x + zombie.tam &&
+                jugador.x + jugador.tam > zombie.x &&
+                jugador.y < zombie.y + zombie.tam &&
+                jugador.y + jugador.tam > zombie.y) {
+                alert("EL ZOMBIE GIGANTE TE APLASTÓ");
+                jugador.x = 400; jugador.y = 250;
+                zombie.x = 50; zombie.y = 50;
             }
         }
 
         function dibujar() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Dibujar Jugador
             ctx.fillStyle = jugador.color;
             ctx.fillRect(jugador.x, jugador.y, jugador.tam, jugador.tam);
+            
+            // Dibujar Zombie Gigante
             ctx.fillStyle = zombie.color;
             ctx.fillRect(zombie.x, zombie.y, zombie.tam, zombie.tam);
+            
+            // Un toque de "sangre" alrededor del zombie
+            ctx.strokeStyle = "darkred";
+            ctx.lineWidth = 4;
+            ctx.strokeRect(zombie.x, zombie.y, zombie.tam, zombie.tam);
         }
 
         function bucle() {
