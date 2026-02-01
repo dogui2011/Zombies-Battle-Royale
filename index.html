@@ -2,46 +2,51 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Zombies BR - Sistema de Armas</title>
+    <title>Zombies BR - New Look</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Arial Black', sans-serif; }
         canvas { display: none; background: #0b0b0b; }
         
-        /* Pantalla de Inicio mejorada */
+        /* PANTALLA DE INICIO CON TU NUEVA FOTO */
         #menu { 
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             height: 100%; color: white; text-align: center;
-            background: linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.8)), url('https://images.unsplash.com/photo-1509248961158-e54f6934749c?q=80&w=1000&auto=format&fit=crop');
+            /* Aquí puse una imagen de zombie tipo cartoon como la que me pasaste */
+            background: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.8)), 
+                        url('https://img.freepik.com/vector-gratis/personaje-dibujos-animados-zombie-estilo-plano-diseno_23-2149114675.jpg');
             background-size: cover;
+            background-position: center;
         }
 
         .btn {
-            background: #e74c3c; border: none; padding: 15px 40px; color: white;
-            font-size: 24px; cursor: pointer; border-radius: 5px; margin: 10px;
-            transition: 0.2s; border-bottom: 5px solid #c0392b;
+            background: #2ecc71; border: none; padding: 15px 40px; color: white;
+            font-size: 24px; cursor: pointer; border-radius: 8px; margin: 10px;
+            transition: 0.2s; border-bottom: 5px solid #27ae60; text-transform: uppercase;
         }
-        .btn:active { transform: translateY(3px); border-bottom: 2px solid #c0392b; }
+        .btn:hover { background: #27ae60; transform: scale(1.05); }
         .btn-tienda { background: #f1c40f; border-bottom: 5px solid #d4ac0d; color: #000; }
 
-        #ui-juego { position: absolute; top: 10px; left: 20px; color: white; display: none; pointer-events: none; text-shadow: 2px 2px #000; }
-        .ammo-bar { color: #ff3333; font-size: 20px; }
+        #ui-juego { position: absolute; top: 10px; left: 20px; color: white; display: none; pointer-events: none; text-shadow: 3px 3px #000; }
+        .ammo-bar { color: #ff3333; font-size: 22px; margin-top: 5px; }
+        #banco-display { font-size: 30px; color: #f1c40f; background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 10px; border: 2px solid #f1c40f; margin-bottom: 20px; }
     </style>
 </head>
 <body>
 
     <div id="menu">
-        <h1 style="font-size: 70px; color: #ff3333; margin-bottom: 10px;">ZOMBIES BR</h1>
-        <div style="background: rgba(0,0,0,0.6); padding: 20px; border-radius: 15px; border: 2px solid #ff3333;">
-            <p style="font-size: 25px; color: gold;">BANCO: $<span id="banco-total">0</span></p>
-            <button class="btn" onclick="empezarJuego()">ENTRAR A LA BATALLA</button><br>
-            <button class="btn btn-tienda" onclick="equiparAmetralladora()">COMPRAR AMETRALLADORA ($100)</button>
-        </div>
+        <h1 style="font-size: 80px; color: #ffffff; margin-bottom: 0; text-shadow: 5px 5px #ff3333;">ZOMBIES BR</h1>
+        <p style="font-size: 20px; letter-spacing: 5px; margin-top: 0;">SOBREVIVE A LA HORDA</p>
+        
+        <div id="banco-display">BANCO: $<span id="banco-total">0</span></div>
+        
+        <button class="btn" onclick="empezarJuego()">INICIAR PARTIDA</button><br>
+        <button class="btn btn-tienda" id="btn-comprar" onclick="equiparAmetralladora()">AMETRALLADORA ($100)</button>
     </div>
 
     <div id="ui-juego">
-        <h2 style="color: gold;">Monedas Partida: <span id="puntos">0</span></h2>
-        <div class="ammo-bar">ARMA: <span id="arma-nombre">Pistola</span></div>
-        <div id="municion-div" class="ammo-bar" style="display:none;">BALAS: <span id="balas-count">200</span>/200</div>
+        <h2 style="color: gold; font-size: 35px; margin: 0;">PARTIDA: $<span id="puntos">0</span></h2>
+        <div id="arma-info" class="ammo-bar">ARMA: Pistola Básica</div>
+        <div id="municion-div" class="ammo-bar" style="display:none; color: #ff3333;">BALAS: <span id="balas-count">200</span> / 200</div>
     </div>
 
     <canvas id="juego"></canvas>
@@ -55,7 +60,7 @@
         // MEMORIA DEL JUEGO
         let banco = 0;
         let enJuego = false;
-        let armaEquipada = "pistola"; // pistola o ametralladora
+        let armaEquipada = "pistola"; 
 
         let jugador, zombies, balas, monedas, teclas, puntosPartida, balasAmetralladora;
 
@@ -72,21 +77,22 @@
             document.getElementById("puntos").innerText = "0";
             
             if(armaEquipada === "ametralladora") {
-                document.getElementById("arma-nombre").innerText = "Ametralladora Ligera";
+                document.getElementById("arma-info").innerText = "MODO: Ametralladora Ligera";
                 document.getElementById("municion-div").style.display = "block";
+                document.getElementById("balas-count").innerText = "200";
             } else {
-                document.getElementById("arma-nombre").innerText = "Pistola Básica";
+                document.getElementById("arma-info").innerText = "MODO: Pistola Básica";
                 document.getElementById("municion-div").style.display = "none";
             }
 
             jugador = { x: canvas.width/2, y: canvas.height/2, tam: 30, vel: 5 };
             zombies = []; balas = []; monedas = []; teclas = {};
-            for(let i=0; i<6; i++) crearZombie();
+            for(let i=0; i<7; i++) crearZombie();
             bucle();
         }
 
         function crearZombie() {
-            zombies.push({ x: Math.random()*canvas.width, y: Math.random()<0.5?-50:canvas.height+50, tam: 40, vel: 2 });
+            zombies.push({ x: Math.random()*canvas.width, y: Math.random()<0.5?-50:canvas.height+50, tam: 40, vel: 2.2 });
         }
 
         window.addEventListener("keydown", (e) => teclas[e.key.toLowerCase()] = true);
@@ -97,12 +103,11 @@
             if(!enJuego) return;
             const ahora = Date.now();
             
-            // Lógica de disparo por arma
             if(armaEquipada === "pistola") {
                 if(ahora - cooldown > 400) { disparar(e, "yellow"); cooldown = ahora; }
             } else if(armaEquipada === "ametralladora" && balasAmetralladora > 0) {
-                if(ahora - cooldown > 100) { 
-                    disparar(e, "red"); 
+                if(ahora - cooldown > 90) { 
+                    disparar(e, "#ff0000"); // ROJO USA
                     balasAmetralladora--;
                     document.getElementById("balas-count").innerText = balasAmetralladora;
                     cooldown = ahora; 
@@ -111,8 +116,8 @@
         });
 
         function disparar(e, color) {
-            const ang = Math.atan2(e.clientY - jugador.y, e.clientX - jugador.x);
-            balas.push({ x: jugador.x+15, y: jugador.y+15, vx: Math.cos(ang)*15, vy: Math.sin(ang)*15, color: color });
+            const ang = Math.atan2(e.clientY - (jugador.y+15), e.clientX - (jugador.x+15));
+            balas.push({ x: jugador.x+15, y: jugador.y+15, vx: Math.cos(ang)*16, vy: Math.sin(ang)*16, color: color });
         }
 
         function actualizar() {
@@ -132,6 +137,7 @@
 
             balas.forEach((b, bi) => {
                 b.x += b.vx; b.y += b.vy;
+                if(b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) balas.splice(bi, 1);
                 zombies.forEach((z, zi) => {
                     if(b.x > z.x && b.x < z.x+z.tam && b.y > z.y && b.y < z.y+z.tam) {
                         monedas.push({x: z.x, y: z.y});
@@ -152,10 +158,12 @@
 
         function dibujar() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            // Dibujar Monedas
+            // Monedas
             ctx.fillStyle = "gold"; monedas.forEach(m => { ctx.beginPath(); ctx.arc(m.x+20, m.y+20, 10, 0, 7); ctx.fill(); });
             // Jugador
-            ctx.fillStyle = "#0077ff"; ctx.fillRect(jugador.x, jugador.y, 30, 30);
+            ctx.fillStyle = "#0077ff"; ctx.shadowBlur = 10; ctx.shadowColor = "#0077ff";
+            ctx.fillRect(jugador.x, jugador.y, 30, 30);
+            ctx.shadowBlur = 0;
             // Zombies
             ctx.fillStyle = "#8b0000"; zombies.forEach(z => ctx.fillRect(z.x, z.y, 40, 40));
             // Balas
@@ -164,10 +172,11 @@
 
         function morir() {
             enJuego = false;
-            banco += puntosPartida; // GUARDAR MONEDAS EN EL BANCO
+            banco += puntosPartida;
             document.getElementById("banco-total").innerText = banco;
-            alert("¡MORISTE! Pero lograste salvar $" + puntosPartida + " para tu banco.");
+            alert("TE COMIERON... Pero guardamos $" + puntosPartida + " en tu banco.");
             canvas.style.display = "none"; ui.style.display = "none"; menu.style.display = "flex";
+            armaEquipada = "pistola"; // Se resetea el arma al morir para que tengas que volver a equiparla
         }
 
         function equiparAmetralladora() {
@@ -175,9 +184,9 @@
                 banco -= 100;
                 armaEquipada = "ametralladora";
                 document.getElementById("banco-total").innerText = banco;
-                alert("¡AMETRALLADORA EQUIPADA! Balas rojas listas.");
+                alert("¡EQUIPADA! Tienes 200 balas rojas.");
             } else {
-                alert("Te faltan monedas. ¡Sal a cazar zombies!");
+                alert("Necesitas $100. ¡Sigue matando zombies!");
             }
         }
 
