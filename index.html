@@ -3,136 +3,120 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Taming IO Replica - Fix</title>
+    <title>Taming IO Replica - Pro</title>
     <script src="https://pixijs.download/v8.x/pixi.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@pixi/sound@5.2.2/dist/pixi-sound.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #1099bb; font-family: Arial, sans-serif; }
-        #ui-container {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: white;
-            font-weight: bold;
-            text-shadow: 2px 2px 0px #000;
-            pointer-events: none;
+        body { margin: 0; overflow: hidden; background-color: #1099bb; font-family: 'Arial', sans-serif; }
+        #ui {
+            position: absolute; top: 15px; left: 15px; color: white;
+            font-size: 20px; font-weight: bold; text-shadow: 2px 2px 0px #000; pointer-events: none;
+            display: none; /* Se oculta hasta que empiece el juego */
         }
-        .weapon-menu {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 10px;
+        .menu-armas {
+            position: absolute; bottom: 20px; left: 50%;
+            transform: translateX(-50%); display: none; gap: 10px;
         }
         .btn {
-            padding: 10px 20px;
-            border: 2px solid white;
-            border-radius: 5px;
-            color: white;
-            cursor: pointer;
-            font-weight: bold;
+            padding: 10px 20px; border: 3px solid white; border-radius: 8px;
+            color: white; font-weight: bold; cursor: pointer; transition: 0.2s;
         }
-        .ak { background: #d35400; }
-        .sniper { background: #2980b9; }
-        .mg { background: #27ae60; }
+        .ak { background: #d35400; } .sniper { background: #2980b9; } .mg { background: #27ae60; }
+        #overlay {
+            position: absolute; width: 100%; height: 100%; background: rgba(0,0,0,0.8);
+            display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100;
+        }
+        h1 { color: white; text-shadow: 4px 4px 0px #d35400; font-size: 45px; margin-bottom: 20px; }
     </style>
 </head>
 <body>
 
-    <div id="ui-container">
-        💰 ORO: $50 | ❤️ VIDA: 100%
+    <div id="overlay">
+        <h1>TAMING CLONE</h1>
+        <button class="btn mg" style="font-size: 24px;" onclick="iniciarJuego()">¡JUGAR Y ACTIVAR SONIDO!</button>
     </div>
 
-    <div class="weapon-menu">
+    <div id="ui">💰 ORO: $50 | ❤️ VIDA: 100%</div>
+
+    <div class="menu-armas" id="cont-armas">
         <div class="btn ak">AK-47</div>
         <div class="btn sniper">SNIPER</div>
         <div class="btn mg">MG</div>
     </div>
 
     <script>
-        // Inicializar PixiJS v8
         const app = new PIXI.Application();
+        let zombies = [];
+        let balas = [];
+        let jugador;
 
-        async function init() {
-            await app.init({ 
-                background: '#1099bb', 
-                resizeTo: window,
-                antialias: true 
-            });
+        async function iniciarJuego() {
+            document.getElementById('overlay').style.display = 'none';
+            document.getElementById('ui').style.display = 'block';
+            document.getElementById('cont-armas').style.display = 'flex';
+            
+            await app.init({ background: '#1099bb', resizeTo: window });
             document.body.appendChild(app.canvas);
 
-            // --- JUGADOR (Cuerpo + Manos integradas) ---
-            const player = new PIXI.Container();
-            player.x = window.innerWidth / 2;
-            player.y = window.innerHeight / 2;
-            app.stage.addChild(player);
+            // --- SONIDOS ---
+            // IMPORTANTE: Sube "musica_fondo.mp3" y "disparo.mp3" a tu GitHub
+            PIXI.sound.add('musica', 'musica_fondo.mp3'); 
+            PIXI.sound.add('bang', 'disparo.mp3');
+            PIXI.sound.play('musica', { loop: true, volume: 0.2 });
 
-            // Cuerpo
-            const body = new PIXI.Graphics()
-                .beginFill(0xee8033)
-                .lineStyle(4, 0x000000)
-                .drawCircle(0, 0, 30)
-                .endFill();
-            
-            // Manos (posicionadas correctamente para que no "vuelen")
-            const handL = new PIXI.Graphics()
-                .beginFill(0xee8033)
-                .lineStyle(3, 0x000000)
-                .drawCircle(-25, 25, 10)
-                .endFill();
+            // --- JUGADOR ---
+            jugador = new PIXI.Container();
+            jugador.x = window.innerWidth / 2;
+            jugador.y = window.innerHeight / 2;
+            app.stage.addChild(jugador);
 
-            const handR = new PIXI.Graphics()
-                .beginFill(0xee8033)
-                .lineStyle(3, 0x000000)
-                .drawCircle(25, 25, 10)
-                .endFill();
+            const cuerpo = new PIXI.Graphics().beginFill(0xee8033).lineStyle(4, 0x000000).drawCircle(0, 0, 30).endFill();
+            const manoL = new PIXI.Graphics().beginFill(0xee8033).lineStyle(3, 0x000000).drawCircle(-25, 25, 10).endFill();
+            const manoR = new PIXI.Graphics().beginFill(0xee8033).lineStyle(3, 0x000000).drawCircle(25, 25, 10).endFill();
+            jugador.addChild(cuerpo, manoL, manoR);
 
-            player.addChild(body, handL, handR);
-
-            // --- BALAS ---
-            const bullets = [];
-
+            // --- DISPARO ---
             window.addEventListener('mousedown', () => {
-                const bullet = new PIXI.Graphics()
-                    .beginFill(0x333333)
-                    .drawCircle(0, 0, 6)
-                    .endFill();
-
-                bullet.x = player.x;
-                bullet.y = player.y;
-                
-                // Cálculo de dirección según la rotación del personaje
-                const speed = 15;
-                bullet.dx = Math.cos(player.rotation + Math.PI/2) * speed;
-                bullet.dy = Math.sin(player.rotation + Math.PI/2) * speed;
-
-                app.stage.addChild(bullet);
-                bullets.push(bullet);
+                try { PIXI.sound.play('bang', { volume: 0.4 }); } catch(e) {}
+                const b = new PIXI.Graphics().beginFill(0x000000).drawCircle(0, 0, 5).endFill();
+                b.x = jugador.x; b.y = jugador.y;
+                const angle = jugador.rotation + Math.PI/2;
+                b.vx = Math.cos(angle) * 12;
+                b.vy = Math.sin(angle) * 12;
+                app.stage.addChild(b);
+                balas.push(b);
             });
 
-            // --- LOOP DEL JUEGO ---
+            // --- SPAWN ZOMBIES ---
+            setInterval(() => {
+                const z = new PIXI.Graphics().beginFill(0x2ecc71).lineStyle(3, 0x000000).drawCircle(0, 0, 25).endFill();
+                const pos = Math.random() > 0.5 ? { x: -50, y: Math.random() * window.innerHeight } : { x: window.innerWidth + 50, y: Math.random() * window.innerHeight };
+                z.x = pos.x; z.y = pos.y;
+                app.stage.addChild(z);
+                zombies.push(z);
+            }, 2000);
+
+            // --- LOOP ---
             app.ticker.add(() => {
-                // Rotar personaje hacia el mouse
                 const mouse = app.renderer.events.pointer;
-                const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
-                player.rotation = angle - Math.PI/2;
+                jugador.rotation = Math.atan2(mouse.y - jugador.y, mouse.x - jugador.x) - Math.PI/2;
 
-                // Mover balas
-                for (let i = bullets.length - 1; i >= 0; i--) {
-                    bullets[i].x += bullets[i].dx;
-                    bullets[i].y += bullets[i].dy;
+                balas.forEach((b, i) => {
+                    b.x += b.vx; b.y += b.vy;
+                    zombies.forEach((z, zi) => {
+                        if(Math.hypot(z.x - b.x, z.y - b.y) < 30) {
+                            app.stage.removeChild(z); zombies.splice(zi, 1);
+                            app.stage.removeChild(b); balas.splice(i, 1);
+                        }
+                    });
+                });
 
-                    // Borrar si salen de pantalla
-                    if (bullets[i].x < 0 || bullets[i].x > window.innerWidth || 
-                        bullets[i].y < 0 || bullets[i].y > window.innerHeight) {
-                        app.stage.removeChild(bullets[i]);
-                        bullets.splice(i, 1);
-                    }
-                }
+                zombies.forEach(z => {
+                    const ang = Math.atan2(jugador.y - z.y, jugador.x - z.x);
+                    z.x += Math.cos(ang) * 2; z.y += Math.sin(ang) * 2;
+                });
             });
         }
-
-        init();
     </script>
 </body>
 </html>
