@@ -2,77 +2,112 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Zombies BR - GIGANTES</title>
+    <title>Zombies BR - Fullscreen & Coins</title>
     <style>
-        body { background: #1a1a1a; color: #ff0000; text-align: center; font-family: 'Courier New', Courier, monospace; overflow: hidden; }
-        canvas { background: #000; border: 5px solid #ff0000; display: block; margin: 0 auto; box-shadow: 0 0 20px red; }
+        /* Pantalla completa y sin bordes feos */
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+        canvas { display: block; background: #000; }
+        #ui { position: absolute; top: 10px; left: 10px; color: lime; font-family: sans-serif; pointer-events: none; }
     </style>
 </head>
 <body>
-    <h1>ZOMBIE GIGANTE ATACA</h1>
-    <p>¡Cuidado! El zombie rojo es enorme y tiene hambre.</p>
-    <canvas id="juego" width="800" height="500"></canvas>
+    <div id="ui">
+        <h1>ZOMBIES BATTLE ROYALE</h1>
+        <p>Monedas: <span id="puntos">0</span></p>
+        <p>WASD para mover | Clic para disparar</p>
+    </div>
+    <canvas id="juego"></canvas>
 
     <script>
         const canvas = document.getElementById("juego");
         const ctx = canvas.getContext("2d");
+        const puntosTxt = document.getElementById("puntos");
 
-        // Jugador (Azul)
-        let jugador = { x: 400, y: 250, tam: 30, color: "#0077ff", vel: 6 };
-        
-        // ZOMBIE GIGANTE (Rojo) - ¡Aquí le subí el tamaño!
+        // Ajustar canvas al tamaño de la pantalla
+        function ajustarPantalla() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener("resize", ajustarPantalla);
+        ajustarPantalla();
+
+        let score = 0;
+        let jugador = { x: canvas.width/2, y: canvas.height/2, tam: 30, color: "#0077ff", vel: 5 };
         let zombie = { x: 50, y: 50, tam: 60, color: "red", vel: 2.5 };
+        let balas = [];
+        let monedas = [];
 
         let teclas = {};
-        window.addEventListener("keydown", (e) => teclas[e.key] = true);
-        window.addEventListener("keyup", (e) => teclas[e.key] = false);
+        window.addEventListener("keydown", (e) => teclas[e.key.toLowerCase()] = true);
+        window.addEventListener("keyup", (e) => teclas[e.key.toLowerCase()] = false);
+
+        window.addEventListener("mousedown", (e) => {
+            const angulo = Math.atan2(e.clientY - (jugador.y + 15), e.clientX - (jugador.x + 15));
+            balas.push({ x: jugador.x + 15, y: jugador.y + 15, vx: Math.cos(angulo) * 10, vy: Math.sin(angulo) * 10 });
+        });
 
         function actualizar() {
-            // Movimiento Jugador
-            if (teclas["ArrowUp"] || teclas["w"]) jugador.y -= jugador.vel;
-            if (teclas["ArrowDown"] || teclas["s"]) jugador.y += jugador.vel;
-            if (teclas["ArrowLeft"] || teclas["a"]) jugador.x -= jugador.vel;
-            if (teclas["ArrowRight"] || teclas["d"]) jugador.x += jugador.vel;
+            // Movimiento con MUROS (No se sale de la pantalla)
+            if (teclas["w"] && jugador.y > 0) jugador.y -= jugador.vel;
+            if (teclas["s"] && jugador.y < canvas.height - jugador.tam) jugador.y += jugador.vel;
+            if (teclas["a"] && jugador.x > 0) jugador.x -= jugador.vel;
+            if (teclas["d"] && jugador.x < canvas.width - jugador.tam) jugador.x += jugador.vel;
 
-            // IA del Zombie Gigante
+            // Zombie persiguiendo
             if (zombie.x < jugador.x) zombie.x += zombie.vel;
             if (zombie.x > jugador.x) zombie.x -= zombie.vel;
             if (zombie.y < jugador.y) zombie.y += zombie.vel;
             if (zombie.y > jugador.y) zombie.y -= zombie.vel;
-            
-            // Colisión (Si el zombie te alcanza)
-            if (jugador.x < zombie.x + zombie.tam &&
-                jugador.x + jugador.tam > zombie.x &&
-                jugador.y < zombie.y + zombie.tam &&
-                jugador.y + jugador.tam > zombie.y) {
-                alert("EL ZOMBIE GIGANTE TE APLASTÓ");
-                jugador.x = 400; jugador.y = 250;
-                zombie.x = 50; zombie.y = 50;
+
+            // Balas y Colisión con Zombie
+            balas.forEach((b, i) => {
+                b.x += b.vx; b.y += b.vy;
+                if (b.x > zombie.x && b.x < zombie.x + zombie.tam && b.y > zombie.y && b.y < zombie.y + zombie.tam) {
+                    // El zombie muere y suelta moneda
+                    monedas.push({ x: zombie.x + 20, y: zombie.y + 20 });
+                    zombie.x = Math.random() * canvas.width;
+                    zombie.y = Math.random() * canvas.height;
+                    balas.splice(i, 1);
+                }
+            });
+
+            // Recoger Monedas
+            monedas.forEach((m, i) => {
+                if (Math.abs(jugador.x - m.x) < 30 && Math.abs(jugador.y - m.y) < 30) {
+                    score += 10;
+                    puntosTxt.innerText = score;
+                    monedas.splice(i, 1);
+                }
+            });
+
+            // Si el zombie te toca
+            if (Math.abs(jugador.x - zombie.x) < 40 && Math.abs(jugador.y - zombie.y) < 40) {
+                score = 0; puntosTxt.innerText = score;
+                jugador.x = canvas.width/2; jugador.y = canvas.height/2;
             }
         }
 
         function dibujar() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Dibujar Jugador
+            // Jugador
             ctx.fillStyle = jugador.color;
             ctx.fillRect(jugador.x, jugador.y, jugador.tam, jugador.tam);
-            
-            // Dibujar Zombie Gigante
+            // Zombie
             ctx.fillStyle = zombie.color;
             ctx.fillRect(zombie.x, zombie.y, zombie.tam, zombie.tam);
-            
-            // Un toque de "sangre" alrededor del zombie
-            ctx.strokeStyle = "darkred";
-            ctx.lineWidth = 4;
-            ctx.strokeRect(zombie.x, zombie.y, zombie.tam, zombie.tam);
+            // Balas
+            ctx.fillStyle = "yellow";
+            balas.forEach(b => ctx.fillRect(b.x, b.y, 6, 6));
+            // Monedas
+            ctx.fillStyle = "gold";
+            monedas.forEach(m => {
+                ctx.beginPath();
+                ctx.arc(m.x, m.y, 10, 0, Math.PI*2);
+                ctx.fill();
+            });
         }
 
-        function bucle() {
-            actualizar();
-            dibujar();
-            requestAnimationFrame(bucle);
-        }
+        function bucle() { actualizar(); dibujar(); requestAnimationFrame(bucle); }
         bucle();
     </script>
 </body>
