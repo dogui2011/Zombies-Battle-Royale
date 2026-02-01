@@ -1,129 +1,146 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <title>Taming IO - Battle Royale</title>
+    <meta charset="utf-8"/>
+    <title>Taming the BEAST | Game Edition</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
     <script src="https://pixijs.download/v8.x/pixi.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@pixi/sound@5.2.2/dist/pixi-sound.js"></script>
+
     <style>
-        body { margin: 0; overflow: hidden; background-color: #1099bb; font-family: 'Arial Black', sans-serif; }
-        #ui { position: absolute; top: 20px; left: 20px; color: white; text-shadow: 2px 2px #000; pointer-events: none; }
-        .menu { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
-        .btn { padding: 15px 25px; border: 3px solid #fff; border-radius: 10px; color: white; cursor: pointer; font-weight: bold; transition: 0.2s; }
-        .ak { background: #d35400; } .sniper { background: #2980b9; } .mg { background: #27ae60; }
-        #start { position: absolute; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 100; }
+        body { margin: 0; overflow: hidden; background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        /* Estilo de la Barra de Navegación (basado en lo que pasaste) */
+        .navbar {
+            background: #f8f9fa;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #dee2e6;
+            position: absolute; width: 100%; z-index: 10;
+        }
+        .navbar-brand { font-weight: bold; color: #333; text-decoration: none; font-size: 1.2rem; }
+        
+        /* Contenedor de UI del Juego */
+        #game-ui {
+            position: absolute; top: 70px; left: 20px;
+            z-index: 5; pointer-events: none;
+        }
+        .stat-box {
+            background: rgba(255,255,255,0.9);
+            padding: 10px 20px; border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 10px; font-weight: bold;
+        }
+
+        /* Botones de Armas (Pills) */
+        #weapon-select {
+            position: absolute; bottom: 30px; left: 50%;
+            transform: translateX(-50%); display: flex; gap: 10px; z-index: 5;
+        }
+        .nav-link {
+            padding: 10px 20px; background: #007bff; color: white;
+            border-radius: 50px; text-decoration: none; font-weight: bold;
+            transition: 0.3s; border: none; cursor: pointer;
+        }
+        .nav-link.active { background: #0056b3; box-shadow: 0 0 10px rgba(0,123,255,0.5); }
+
+        #overlay {
+            position: absolute; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.9);
+            display: flex; flex-direction: column; justify-content: center;
+            align-items: center; z-index: 20;
+        }
     </style>
 </head>
+
 <body>
 
-    <div id="start">
-        <button class="btn mg" onclick="setup()">¡EMPEZAR PARTIDA!</button>
+    <div id="overlay">
+        <h1 style="color: #333;">Taming the BEAST</h1>
+        <p>Tutorial: Cómo sobrevivir en el mapa</p>
+        <button class="nav-link" style="font-size: 20px;" onclick="startGame()">EMPEZAR TUTORIAL</button>
     </div>
 
-    <div id="ui">💰 ORO: $50 | ❤️ VIDA: 100%</div>
+    <nav class="navbar">
+        <a class="navbar-brand" href="#">
+            <img src="https://taming-the-beast.org/images/logo_bw.svg" style="height:1.5em; vertical-align:middle; margin-right:10px;">
+            Taming the BEAST / Game
+        </a>
+    </nav>
 
-    <div class="menu">
-        <div class="btn ak" onclick="cambiarArma('AK')">AK-47</div>
-        <div class="btn sniper" onclick="cambiarArma('SNIPER')">SNIPER</div>
-        <div class="btn mg" onclick="cambiarArma('MG')">MG</div>
+    <div id="game-ui">
+        <div class="stat-box">💰 ORO: <span id="gold">50</span></div>
+        <div class="stat-box" style="color: #d9534f;">❤️ VIDA: 100%</div>
+    </div>
+
+    <div id="weapon-select">
+        <button class="nav-link active" onclick="setWeapon('AK')">AK-47</button>
+        <button class="nav-link" onclick="setWeapon('SNIPER')">SNIPER</button>
+        <button class="nav-link" onclick="setWeapon('MG')">MACHINE GUN</button>
     </div>
 
     <script>
         const app = new PIXI.Application();
-        let jugador, armaVisual, balas = [], zombies = [];
-        let armaActual = 'AK';
+        let player, bullets = [], weapon = 'AK';
 
-        async function setup() {
-            document.getElementById('start').style.display = 'none';
-            await app.init({ background: '#1099bb', resizeTo: window });
+        async function startGame() {
+            document.getElementById('overlay').style.display = 'none';
+            
+            await app.init({ background: '#74b816', resizeTo: window, antialias: true });
             document.body.appendChild(app.canvas);
 
-            // Sonidos
+            // Sonidos (Asegúrate de tener estos archivos en tu GitHub)
+            PIXI.sound.add('shoot', 'disparo.mp3');
             PIXI.sound.add('bg', 'musica_fondo.mp3');
-            PIXI.sound.add('shot', 'disparo.mp3');
             PIXI.sound.play('bg', { loop: true, volume: 0.1 });
 
-            // --- CREACIÓN DEL PERSONAJE ---
-            jugador = new PIXI.Container();
-            jugador.x = window.innerWidth / 2;
-            jugador.y = window.innerHeight / 2;
-            app.stage.addChild(jugador);
+            // Jugador
+            player = new PIXI.Container();
+            player.x = app.screen.width / 2;
+            player.y = app.screen.height / 2;
+            app.stage.addChild(player);
 
-            const cuerpo = new PIXI.Graphics().beginFill(0xee8033).lineStyle(4, 0x000000).drawCircle(0, 0, 30).endFill();
-            
-            // Manos integradas al contenedor para que roten con él
-            const manoL = new PIXI.Graphics().beginFill(0xee8033).lineStyle(3, 0x000000).drawCircle(-25, 20, 10).endFill();
-            const manoR = new PIXI.Graphics().beginFill(0xee8033).lineStyle(3, 0x000000).drawCircle(25, 20, 10).endFill();
+            const body = new PIXI.Graphics().beginFill(0xee8033).lineStyle(4, 0x000).drawCircle(0, 0, 30).endFill();
+            const hL = new PIXI.Graphics().beginFill(0xee8033).lineStyle(3, 0x000).drawCircle(-25, 20, 10).endFill();
+            const hR = new PIXI.Graphics().beginFill(0xee8033).lineStyle(3, 0x000).drawCircle(25, 20, 10).endFill();
+            player.addChild(body, hL, hR);
 
-            // Arma visual (un rectángulo que sale de la mano derecha)
-            armaVisual = new PIXI.Graphics().beginFill(0x333333).drawRect(20, 10, 40, 10).endFill();
+            // Disparo
+            window.addEventListener('mousedown', () => {
+                PIXI.sound.play('shoot');
+                const b = new PIXI.Graphics().beginFill(0x333).drawCircle(0, 0, 6).endFill();
+                b.x = player.x; b.y = player.y;
+                const angle = player.rotation + Math.PI/2;
+                const speed = weapon === 'SNIPER' ? 25 : 15;
+                b.vx = Math.cos(angle) * speed;
+                b.vy = Math.sin(angle) * speed;
+                app.stage.addChild(b);
+                bullets.push(b);
+            });
 
-            jugador.addChild(cuerpo, manoL, manoR, armaVisual);
+            app.ticker.add(() => {
+                const m = app.renderer.events.pointer;
+                player.rotation = Math.atan2(m.y - player.y, m.x - player.x) - Math.PI/2;
 
-            // --- EVENTO DE DISPARO ---
-            window.addEventListener('mousedown', disparar);
-
-            app.ticker.add(update);
-            spawnZombies();
-        }
-
-        function cambiarArma(tipo) {
-            armaActual = tipo;
-            armaVisual.clear();
-            if(tipo === 'AK') armaVisual.beginFill(0x555555).drawRect(20, 10, 45, 12).endFill();
-            if(tipo === 'SNIPER') armaVisual.beginFill(0x222222).drawRect(20, 10, 70, 8).endFill();
-            if(tipo === 'MG') armaVisual.beginFill(0x27ae60).drawRect(20, 5, 50, 20).endFill();
-        }
-
-        function disparar() {
-            PIXI.sound.play('shot', { volume: 0.3 });
-            const b = new PIXI.Graphics().beginFill(0xFFFF00).drawCircle(0, 0, 5).endFill();
-            b.x = jugador.x; b.y = jugador.y;
-            
-            const angle = jugador.rotation + Math.PI/2;
-            const speed = armaActual === 'SNIPER' ? 25 : 15;
-            b.vx = Math.cos(angle) * speed;
-            b.vy = Math.sin(angle) * speed;
-            
-            app.stage.addChild(b);
-            balas.push(b);
-        }
-
-        function spawnZombies() {
-            setInterval(() => {
-                const z = new PIXI.Graphics().beginFill(0x2ecc71).lineStyle(3, 0x000000).drawCircle(0, 0, 25).endFill();
-                z.x = Math.random() > 0.5 ? -50 : window.innerWidth + 50;
-                z.y = Math.random() * window.innerHeight;
-                app.stage.addChild(z);
-                zombies.push(z);
-            }, 2000);
-        }
-
-        function update() {
-            const mouse = app.renderer.events.pointer;
-            jugador.rotation = Math.atan2(mouse.y - jugador.y, mouse.x - jugador.x) - Math.PI/2;
-
-            // Mover balas y limpiar
-            balas.forEach((b, i) => {
-                b.x += b.vx; b.y += b.vy;
-                if(b.x < 0 || b.x > window.innerWidth || b.y < 0 || b.y > window.innerHeight) {
-                    app.stage.removeChild(b); balas.splice(i, 1);
+                for (let i = bullets.length - 1; i >= 0; i--) {
+                    bullets[i].x += bullets[i].vx;
+                    bullets[i].y += bullets[i].vy;
+                    if(bullets[i].x < 0 || bullets[i].x > app.screen.width || bullets[i].y < 0 || bullets[i].y > app.screen.height) {
+                        app.stage.removeChild(bullets[i]);
+                        bullets.splice(i, 1);
+                    }
                 }
             });
+        }
 
-            // Mover zombies y colisiones
-            zombies.forEach((z, zi) => {
-                const ang = Math.atan2(jugador.y - z.y, jugador.x - z.x);
-                z.x += Math.cos(ang) * 1.5;
-                z.y += Math.sin(ang) * 1.5;
-
-                balas.forEach((b, bi) => {
-                    if(Math.hypot(z.x - b.x, z.y - b.y) < 30) {
-                        app.stage.removeChild(z); zombies.splice(zi, 1);
-                        app.stage.removeChild(b); balas.splice(bi, 1);
-                    }
-                });
-            });
+        function setWeapon(type) {
+            weapon = type;
+            const btns = document.querySelectorAll('.nav-link');
+            btns.forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
         }
     </script>
 </body>
